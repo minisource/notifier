@@ -3,7 +3,7 @@ package sms
 import (
 	"github.com/minisource/common_go/logging"
 	"github.com/minisource/notifire/config"
-	"github.com/minisource/notifire/internal/platform/sms/providers"
+	providers "github.com/minisource/notifire/internal/platform/sms/platforms"
 )
 
 // متد ارسال پیامک
