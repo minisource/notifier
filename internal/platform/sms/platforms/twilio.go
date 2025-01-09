@@ -1,6 +1,8 @@
 package providers
 
-import "fmt"
+import (
+	"errors"
+)
 
 // Twilio represents the Twilio SMS provider
 type TwilioServcie struct {
@@ -10,7 +12,5 @@ type TwilioServcie struct {
 
 // TODO: SendSMS sends an SMS via the Twilio provider
 func (t *TwilioServcie) SendSMS(to, message string) error {
-	// Simulating the sending of SMS via Twilio
-	fmt.Printf("Sending SMS to %s via Twilio: %s\n", to, message)
-	return nil
+	return errors.New("twilio not implemented yet.")
 }
