@@ -1,116 +1,99 @@
 package config
 
 import (
-	"errors"
+	"fmt"
 	"log"
 	"os"
+	"strings"
 
+	"github.com/caarlos0/env/v10"
 	"github.com/minisource/common_go/logging"
-	"github.com/spf13/viper"
 )
 
 type Config struct {
 	Server ServerConfig
 	// Postgres PostgresConfig
-	Password PasswordConfig
-	Cors     CorsConfig
-	Logger   logging.LoggerConfig
-	SMS      SMSConfig
+	Cors   CorsConfig
+	Logger logging.LoggerConfig
+	SMS    SMSConfig
 }
 
-type SMSConfig struct {
-	Provider string
-	ApiKey   string
-	NotSendSms  bool
+type ServerConfig struct {
+	InternalPort string `env:"SERVER_INTERNAL_PORT"`
+	ExternalPort string `env:"SERVER_EXTERNAL_PORT"`
+	RunMode      string `env:"SERVER_RUN_MODE"`
 }
 
 // type PostgresConfig struct {
-// 	Host            string
-// 	Port            string
-// 	User            string
-// 	Password        string
-// 	DbName          string
-// 	SSLMode         string
-// 	MaxIdleConns    int
-// 	MaxOpenConns    int
-// 	ConnMaxLifetime time.Duration
+// 	Host            string        `env:"POSTGRES_HOST"`
+// 	Port            string        `env:"POSTGRES_PORT"`
+// 	User            string        `env:"POSTGRES_USER"`
+// 	Password        string        `env:"POSTGRES_PASSWORD"`
+// 	DbName          string        `env:"POSTGRES_DBNAME"`
+// 	SSLMode         string        `env:"POSTGRES_SSLMODE"`
+// 	MaxIdleConns    int           `env:"POSTGRES_MAX_IDLE_CONNS"`
+// 	MaxOpenConns    int           `env:"POSTGRES_MAX_OPEN_CONNS"`
+// 	ConnMaxLifetime time.Duration `env:"POSTGRES_CONN_MAX_LIFETIME"`
 // }
 
-type ServerConfig struct {
-	InternalPort string
-	ExternalPort string
-	RunMode      string
-}
-
 type CorsConfig struct {
-	AllowOrigins string
+	AllowOrigins string `env:"CORS_ALLOW_ORIGINS"`
 }
 
-type PasswordConfig struct {
-	IncludeChars     bool
-	IncludeDigits    bool
-	MinLength        int
-	MaxLength        int
-	IncludeUppercase bool
-	IncludeLowercase bool
+type SMSConfig struct {
+	Providers       []SMSProviderConfig
+	DefualtProvider string `env:"SMS_Defualt_Provider"`
+	NotSendSms      bool   `env:"SMS_NOT_SEND_SMS"`
 }
 
+type SMSProviderConfig struct {
+	Provider string `env:"SMS_PROVIDER"`
+	ApiKey   string `env:"SMS_API_KEY"`
+}
+
+// LoadConfig loads configuration from environment variables
 func GetConfig() *Config {
-	cfgPath := getConfigPath(os.Getenv("APP_ENV"))
-	v, err := LoadConfig(cfgPath, "yml")
-	if err != nil {
-		log.Fatalf("Error in load config %v", err)
+	cfg := &Config{}
+	if err := env.Parse(cfg); err != nil {
+		log.Fatalf("Error in parse config %v", err)
+		panic(err)
 	}
 
-	cfg, err := ParseConfig(v)
-	envPort := os.Getenv("PORT")
-	if envPort != "" {
-		cfg.Server.ExternalPort = envPort
-		log.Printf("Set external port from environment -> %s", cfg.Server.ExternalPort)
-	} else {
-		cfg.Server.ExternalPort = cfg.Server.InternalPort
-		log.Printf("Set external port from environment -> %s", cfg.Server.ExternalPort)
-	}
-	if err != nil {
-		log.Fatalf("Error in parse config %v", err)
+	// Handle SMS Providers and API Keys parsing
+	smsProviders := os.Getenv("SMS_PROVIDERS")
+	if smsProviders != "" {
+		smsApiKeys := os.Getenv("SMS_API_KEYS")
+		if smsApiKeys != "" {
+			providers := strings.Split(smsProviders, ",")
+			apiKeys := strings.Split(smsApiKeys, ",")
+
+			if len(providers) != len(apiKeys) {
+				log.Fatalf("SMS_PROVIDERS and SMS_API_KEYS must have the same length")
+				return nil
+			}
+
+			var smsConfigs []SMSProviderConfig
+			for i := 0; i < len(providers); i++ {
+				smsConfigs = append(smsConfigs, SMSProviderConfig{
+					Provider: providers[i],
+					ApiKey:   apiKeys[i],
+				})
+			}
+			cfg.SMS.Providers = smsConfigs
+		}
 	}
 
 	return cfg
 }
 
-func ParseConfig(v *viper.Viper) (*Config, error) {
-	var cfg Config
-	err := v.Unmarshal(&cfg)
-	if err != nil {
-		log.Printf("Unable to parse config: %v", err)
-		return nil, err
-	}
-	return &cfg, nil
-}
-func LoadConfig(filename string, fileType string) (*viper.Viper, error) {
-	v := viper.New()
-	v.SetConfigType(fileType)
-	v.SetConfigName(filename)
-	v.AddConfigPath(".")
-	v.AutomaticEnv()
-
-	err := v.ReadInConfig()
-	if err != nil {
-		log.Printf("Unable to read config: %v", err)
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			return nil, errors.New("config file not found")
+// GetApiKeyByProvider returns the API key for the given provider
+func (cfg *SMSConfig) GetApiKeyByProvider(provider string) (string, error) {
+	// Iterate over the SMS configurations
+	for _, sms := range cfg.Providers {
+		if strings.EqualFold(sms.Provider, provider) {
+			return sms.ApiKey, nil
 		}
-		return nil, err
 	}
-	return v, nil
-}
 
-func getConfigPath(env string) string {
-	if env == "docker" {
-		return "/config/config-docker"
-	} else if env == "production" {
-		return "/config/config-production"
-	} else {
-		return "/config/config-development"
-	}
+	return "", fmt.Errorf("API key not found for provider: %s", provider)
 }

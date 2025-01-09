@@ -4,10 +4,16 @@ import (
 	"github.com/kavenegar/kavenegar-go"
 )
 
-func Kavenegar(apiKey, to, body, template string) error {
-	api := kavenegar.New(apiKey)
+type KavenegarService struct {
+	ApiKey string
+	Template  string
+}
+
+
+func (k *KavenegarService) SendSMS(to, message string) error {
+	api := kavenegar.New(k.ApiKey)
 	params := &kavenegar.VerifyLookupParam{}
-	if _, err := api.Verify.Lookup(to, template, body, params); err != nil {
+	if _, err := api.Verify.Lookup(to, k.Template, message, params); err != nil {
 		return err;
 	}
 	
