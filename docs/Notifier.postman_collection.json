@@ -1,0 +1,72 @@
+{
+	"info": {
+		"_postman_id": "2bfee730-daae-419c-bf74-c97dc96825cf",
+		"name": "Notifier",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "16402080",
+		"_collection_link": "https://www.postman.com/crimson-meteor-7716/workspace/minisource/collection/16402080-2bfee730-daae-419c-bf74-c97dc96825cf?action=share&source=collection_link&creator=16402080"
+	},
+	"item": [
+		{
+			"name": "SMS",
+			"item": [
+				{
+					"name": "Send",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"To\": \"+1011793041\",\n    \"Body\": \"123456\",\n    \"template\": \"otppersianbeauti\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseurl}}/v1/sms",
+							"host": [
+								"{{baseurl}}"
+							],
+							"path": [
+								"v1",
+								"sms"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseurl",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
