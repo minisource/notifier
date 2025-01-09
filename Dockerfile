@@ -1,11 +1,8 @@
-# Use the official Golang image as the base image
-FROM golang:alpine3.21
+# Use the latest Golang Alpine image
+FROM golang:alpine3.21 as builder
 
 # Set the Current Working Directory inside the container
 WORKDIR /app
-
-# Copy the compiled binary from the builder stage
-COPY --from=builder /app/main .
 
 # Copy go mod and sum files
 COPY go.mod go.sum ./
@@ -18,6 +15,15 @@ COPY . .
 
 # Build the Go app
 RUN go build -o ./cmd/server/main .
+
+# Create a smaller image for running the app
+FROM alpine:latest
+
+# Set the Current Working Directory inside the container
+WORKDIR /app
+
+# Copy the compiled binary from the builder stage
+COPY --from=builder /app/cmd/server/main .
 
 # Expose port 8080 to the outside world
 EXPOSE 80
