@@ -4,6 +4,9 @@ FROM golang:alpine3.21
 # Set the Current Working Directory inside the container
 WORKDIR /app
 
+# Copy the compiled binary from the builder stage
+COPY --from=builder /app/main .
+
 # Copy go mod and sum files
 COPY go.mod go.sum ./
 
@@ -20,4 +23,4 @@ RUN go build -o ./cmd/server/main .
 EXPOSE 80
 
 # Command to run the executable
-CMD ["./cmd/server/main "]
+CMD ["./main"]
