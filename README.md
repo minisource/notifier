@@ -1,6 +1,6 @@
-# notifire
+# notifier
 
-Notifire is a notification service that supports sending notifications via SMS, email, and push notifications.
+notifier is a notification service that supports sending notifications via SMS, email, and push notifications.
 
 ## Getting Started
 
@@ -13,8 +13,8 @@ Notifire is a notification service that supports sending notifications via SMS, 
 
 1. Clone the repository:
     ```sh
-    git clone https://github.com/minisource/notifire.git
-    cd notifire
+    git clone https://github.com/minisource/notifier.git
+    cd notifier
     ```
 
 2. Install dependencies:

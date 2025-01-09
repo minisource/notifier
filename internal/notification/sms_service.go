@@ -2,9 +2,9 @@ package notification
 
 import (
 	"github.com/minisource/common_go/logging"
-	"github.com/minisource/notifire/api/v1/dto"
-	"github.com/minisource/notifire/config"
-	"github.com/minisource/notifire/internal/platform/sms"
+	"github.com/minisource/notifier/api/v1/dto"
+	"github.com/minisource/notifier/config"
+	"github.com/minisource/notifier/internal/platform/sms"
 )
 
 type SMSService struct {
@@ -21,7 +21,7 @@ func NewSMSService(cfg *config.Config) *SMSService {
 }
 
 func (s *SMSService) SendNotification(req dto.SMSRequest) error {
-	if(s.cfg.SMS.NotSendSms) {
+	if s.cfg.SMS.NotSendSms {
 		return nil
 	}
 	return sms.SendSMS(&s.cfg.SMS, s.logger, req.To, req.Body, req.Template)

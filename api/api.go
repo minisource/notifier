@@ -6,8 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/minisource/common_go/http/middlewares"
 	"github.com/minisource/common_go/logging"
-	routers "github.com/minisource/notifire/api/v1/routes"
-	"github.com/minisource/notifire/config"
+	routers "github.com/minisource/notifier/api/v1/routes"
+	"github.com/minisource/notifier/config"
 )
 
 var logger = logging.NewLogger(&config.GetConfig().Logger)

@@ -5,9 +5,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	helper "github.com/minisource/common_go/http/helpers"
-	"github.com/minisource/notifire/api/v1/dto"
-	"github.com/minisource/notifire/config"
-	"github.com/minisource/notifire/internal/notification"
+	"github.com/minisource/notifier/api/v1/dto"
+	"github.com/minisource/notifier/config"
+	"github.com/minisource/notifier/internal/notification"
 )
 
 type SMSHandler struct {

@@ -3,8 +3,8 @@ package sms
 import (
 	"github.com/minisource/common_go/common"
 	"github.com/minisource/common_go/logging"
-	"github.com/minisource/notifire/config"
-	providers "github.com/minisource/notifire/internal/platform/sms/platforms"
+	"github.com/minisource/notifier/config"
+	providers "github.com/minisource/notifier/internal/platform/sms/platforms"
 )
 
 func SendSMS(cfg *config.SMSConfig, logger logging.Logger, to, body, template string) error {
@@ -18,11 +18,11 @@ func SendSMS(cfg *config.SMSConfig, logger logging.Logger, to, body, template st
 		provider = GetSMSSender(cfg, "twilio", template)
 	}
 
-	if err := provider.SendSMS(to, body); err != nil{
+	if err := provider.SendSMS(to, body); err != nil {
 		logger.Errorf("failed to send SMS: %v", err)
 		return err
 	}
-	
+
 	return nil
 }
 

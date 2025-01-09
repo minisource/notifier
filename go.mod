@@ -1,4 +1,4 @@
-module github.com/minisource/notifire
+module github.com/minisource/notifier
 
 go 1.23.4
 

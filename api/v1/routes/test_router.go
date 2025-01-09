@@ -2,7 +2,7 @@ package routers
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/minisource/notifire/api/v1/handlers"
+	"github.com/minisource/notifier/api/v1/handlers"
 )
 
 func TestRouter(r *gin.RouterGroup) {
