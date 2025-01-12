@@ -29,7 +29,7 @@ WORKDIR /app
 COPY --from=builder /app/main .
 
 # Expose port 80 to the outside world
-EXPOSE 80
+EXPOSE 5000
 
 # Command to run the executable
 CMD ["./main"]
