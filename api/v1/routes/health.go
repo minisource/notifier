@@ -1,12 +1,12 @@
 package routers
 
 import (
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v2"
 	"github.com/minisource/notifier/api/v1/handlers"
 )
 
-func Health(r *gin.RouterGroup) {
+func Health(router fiber.Router) {
 	handler := handlers.NewHealthHandler()
 
-	r.GET("/", handler.Health)
+	router.Get("/", handler.Health)
 }

@@ -1,10 +1,8 @@
 package handlers
 
 import (
-	"net/http"
-
-	"github.com/gin-gonic/gin"
-	helper "github.com/minisource/common_go/http/helpers"
+	"github.com/gofiber/fiber/v2"
+	"github.com/minisource/common_go/http/helper"
 	"github.com/minisource/notifier/api/v1/dto"
 	"github.com/minisource/notifier/config"
 	"github.com/minisource/notifier/internal/notification"
@@ -28,21 +26,25 @@ func NewSMSHandler(cfg *config.Config) *SMSHandler {
 // @Success 200 {object} helper.BaseHttpResponse "Success"
 // @Failure 400 {object} helper.BaseHttpResponse "Failed"
 // @Router /v1/Sms/ [post]
-func (h *SMSHandler) SendSMS(c *gin.Context) {
+func (h *SMSHandler) SendSMS(c *fiber.Ctx) error {
+	// Parse the request body
 	req := new(dto.SMSRequest)
-	err := c.ShouldBindJSON(&req)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest,
-			helper.GenerateBaseResponseWithValidationError(nil, false, helper.ValidationError, err))
-		return
+	if err := c.BodyParser(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(
+			helper.GenerateBaseResponseWithValidationError(nil, false, helper.ValidationError, err),
+		)
 	}
 
-	err = h.service.SendNotification(*req)
+	// Call the service to send the SMS
+	err := h.service.SendNotification(*req)
 	if err != nil {
-		c.AbortWithStatusJSON(helper.TranslateErrorToStatusCode(err),
-			helper.GenerateBaseResponseWithError(nil, false, helper.InternalError, err))
-		return
+		return c.Status(helper.TranslateErrorToStatusCode(err)).JSON(
+			helper.GenerateBaseResponseWithError(nil, false, helper.InternalError, err),
+		)
 	}
 
-	c.JSON(http.StatusOK, helper.GenerateBaseResponse(nil, true, 0))
+	// Return a success response
+	return c.Status(fiber.StatusOK).JSON(
+		helper.GenerateBaseResponse(nil, true, 0),
+	)
 }

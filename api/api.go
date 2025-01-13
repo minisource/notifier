@@ -3,8 +3,10 @@ package api
 import (
 	"fmt"
 
-	"github.com/gin-gonic/gin"
-	"github.com/minisource/common_go/http/middlewares"
+	"github.com/bytedance/sonic"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/minisource/common_go/http/middleware"
 	"github.com/minisource/common_go/logging"
 	routers "github.com/minisource/notifier/api/v1/routes"
 	"github.com/minisource/notifier/config"
@@ -13,38 +15,45 @@ import (
 var logger = logging.NewLogger(&config.GetConfig().Logger)
 
 func InitServer(cfg *config.Config) {
-	gin.SetMode(cfg.Server.RunMode)
-	r := gin.New()
-	// RegisterValidators()
+	// Initialize Fiber app
+	app := fiber.New(fiber.Config{
+		// ErrorHandler: handler.CustomErrorHandler(logger),
+		AppName:     cfg.Server.Name,
+		JSONEncoder: sonic.Marshal,
+		JSONDecoder: sonic.Unmarshal,
+	})
 
-	r.Use(middlewares.DefaultStructuredLogger(&cfg.Logger))
-	r.Use(middlewares.Cors(cfg.Cors.AllowOrigins))
-	r.Use(gin.Logger(), gin.CustomRecovery(middlewares.ErrorHandler) /*middlewares.TestMiddleware()*/, middlewares.LimitByRequest())
+	// Middleware
+	app.Use(middleware.DefaultStructuredLogger(&cfg.Logger)) // Custom structured logger
+	app.Use(middleware.Cors(cfg.Cors.AllowOrigins))
+	app.Use(recover.New())
+	app.Use(middleware.LimitByRequest()) // Custom rate limiter
 
-	RegisterRoutes(r, cfg)
-	// RegisterSwagger(r, cfg)
+	// Register routes
+	RegisterRoutes(app, cfg)
 
+	// Start the server
 	logger := logging.NewLogger(&cfg.Logger)
-	logger.Info(logging.General, logging.Startup, "Started", nil)
-	err := r.Run(fmt.Sprintf(":%s", cfg.Server.InternalPort))
+	logger.Info(logging.General, logging.Startup, "Server started", nil)
+
+	err := app.Listen(fmt.Sprintf(":%s", cfg.Server.InternalPort))
 	if err != nil {
 		logger.Fatal(logging.General, logging.Startup, err.Error(), nil)
 	}
 }
 
-func RegisterRoutes(r *gin.Engine, cfg *config.Config) {
-	api := r.Group("/api")
+func RegisterRoutes(app *fiber.App, cfg *config.Config) {
+	// Create an API group
+	api := app.Group("/api")
 
+	// Create a v1 group
 	v1 := api.Group("/v1")
 	{
-		// Test
+		// Health routes
 		health := v1.Group("/health")
-		test_router := v1.Group("/test")
-
 		routers.Health(health)
-		routers.TestRouter(test_router)
 
-		// sms
+		// SMS routes
 		sms := v1.Group("/sms")
 		routers.SMS(sms, cfg)
 	}
