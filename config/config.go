@@ -13,16 +13,17 @@ import (
 type Config struct {
 	Server ServerConfig
 	// Postgres PostgresConfig
-	Cors   CorsConfig
-	Logger logging.LoggerConfig
-	SMS    SMSConfig
+	Cors     CorsConfig
+	Logger   logging.LoggerConfig
+	SMS      SMSConfig
+	OAUTHURL string `env:"APICLIENTS_OAUTH_URL"`
 }
 
 type ServerConfig struct {
 	InternalPort string `env:"SERVER_INTERNAL_PORT"`
 	ExternalPort string `env:"SERVER_EXTERNAL_PORT"`
 	RunMode      string `env:"SERVER_RUN_MODE"`
-	Name      string `env:"SERVER_NAME"`
+	Name         string `env:"SERVER_NAME"`
 }
 
 // type PostgresConfig struct {

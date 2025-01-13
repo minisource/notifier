@@ -6,13 +6,12 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/minisource/common_go/http/helper"
 	"github.com/minisource/common_go/http/middleware"
 	"github.com/minisource/common_go/logging"
 	routers "github.com/minisource/notifier/api/v1/routes"
 	"github.com/minisource/notifier/config"
 )
-
-var logger = logging.NewLogger(&config.GetConfig().Logger)
 
 func InitServer(cfg *config.Config) {
 	// Initialize Fiber app
@@ -43,6 +42,9 @@ func InitServer(cfg *config.Config) {
 }
 
 func RegisterRoutes(app *fiber.App, cfg *config.Config) {
+	// middlewares
+	oauthMiddleware := middleware.OAuthValidationMiddleware(&helper.APIClient{BaseURL: cfg.OAUTHURL,})
+
 	// Create an API group
 	api := app.Group("/api")
 
@@ -54,7 +56,7 @@ func RegisterRoutes(app *fiber.App, cfg *config.Config) {
 		routers.Health(health)
 
 		// SMS routes
-		sms := v1.Group("/sms")
+		sms := v1.Group("/sms", oauthMiddleware)
 		routers.SMS(sms, cfg)
 	}
 }
