@@ -66,6 +66,8 @@ github.com/mattn/go-runewidth v0.0.16 h1:E5ScNMtiwvlvB5paMFdw9p4kSQzbXFikJ5SQO6T
 github.com/mattn/go-runewidth v0.0.16/go.mod h1:Jdepj2loyihRzMpdS35Xk/zdY8IAYHsh153qUoGf23w=
 github.com/minisource/common_go v0.0.4-0.20250113140827-c83f4a03d7fa h1:rVvE5ijP2ILChEjvI5h7lbKZQidDYgdhPruDXBPNI70=
 github.com/minisource/common_go v0.0.4-0.20250113140827-c83f4a03d7fa/go.mod h1:MRyGHZLwf4p2r8IPfWRqZdR1dKZxnSgRisy19AISkmA=
+github.com/minisource/common_go v0.0.4-0.20250113150519-70a469ecb2df h1:p2WWAl2I4OldaKe7GrcZhj7bRYcOLvUfROkQ8pz9dSI=
+github.com/minisource/common_go v0.0.4-0.20250113150519-70a469ecb2df/go.mod h1:MRyGHZLwf4p2r8IPfWRqZdR1dKZxnSgRisy19AISkmA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=

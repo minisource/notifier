@@ -3,7 +3,7 @@ module github.com/minisource/notifier
 go 1.23.4
 
 require (
-	github.com/minisource/common_go v0.0.4-0.20250113140827-c83f4a03d7fa
+	github.com/minisource/common_go v0.0.4-0.20250113150519-70a469ecb2df
 	github.com/prometheus/client_golang v1.20.5
 )
 
