@@ -26,7 +26,7 @@ func InitServer(cfg *config.Config) {
 	app.Use(middleware.DefaultStructuredLogger(&cfg.Logger)) // Custom structured logger
 	app.Use(middleware.Cors(cfg.Cors.AllowOrigins))
 	app.Use(recover.New())
-	app.Use(middleware.LimitByRequest()) // Custom rate limiter
+	// app.Use(middleware.LimitByRequest()) // Custom rate limiter
 
 	// Register routes
 	RegisterRoutes(app, cfg)
@@ -43,7 +43,10 @@ func InitServer(cfg *config.Config) {
 
 func RegisterRoutes(app *fiber.App, cfg *config.Config) {
 	// middlewares
-	oauthMiddleware := middleware.OAuthValidationMiddleware(&helper.APIClient{BaseURL: cfg.OAUTHURL,})
+	oauthMiddleware := middleware.OAuthValidationMiddleware(
+		&helper.APIClient{BaseURL: cfg.OAUTHURL},
+		nil,
+		[]string{"notifier"})
 
 	// Create an API group
 	api := app.Group("/api")

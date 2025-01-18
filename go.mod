@@ -3,7 +3,7 @@ module github.com/minisource/notifier
 go 1.23.4
 
 require (
-	github.com/minisource/common_go v0.0.4-0.20250113200259-26a159b7ff86
+	github.com/minisource/common_go v0.0.4-0.20250118132851-a278430f21c3
 	github.com/prometheus/client_golang v1.20.5
 )
 
@@ -12,9 +12,10 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/didip/tollbooth/v7 v7.0.2 // indirect
 	github.com/go-pkgz/expirable-cache/v3 v3.0.0 // indirect
+	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
-	github.com/minisource/apiclients v0.0.0-20250113173457-a779d9d1629d // indirect
+	github.com/minisource/apiclients v0.0.0-20250118132743-0215151163e3 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect

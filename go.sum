@@ -36,6 +36,8 @@ github.com/go-playground/validator/v10 v10.20.0/go.mod h1:dbuPbCMFw/DrkbEynArYaC
 github.com/godbus/dbus/v5 v5.0.4/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
 github.com/gofiber/fiber/v2 v2.52.6 h1:Rfp+ILPiYSvvVuIPvxrBns+HJp8qGLDnLJawAu27XVI=
 github.com/gofiber/fiber/v2 v2.52.6/go.mod h1:YEcBbO/FB+5M1IZNBP9FO3J9281zgPAreiI1oqg8nDw=
+github.com/golang-jwt/jwt v3.2.2+incompatible h1:IfV12K8xAKAnZqdXVzCZ+TOjboZ2keLg81eXfW3O+oY=
+github.com/golang-jwt/jwt v3.2.2+incompatible/go.mod h1:8pz2t5EyA70fFQQSrl6XZXzqecmYZeUEB8OUGHkxJ+I=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
@@ -60,10 +62,10 @@ github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWE
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/mattn/go-runewidth v0.0.16 h1:E5ScNMtiwvlvB5paMFdw9p4kSQzbXFikJ5SQO6TULQc=
 github.com/mattn/go-runewidth v0.0.16/go.mod h1:Jdepj2loyihRzMpdS35Xk/zdY8IAYHsh153qUoGf23w=
-github.com/minisource/apiclients v0.0.0-20250113173457-a779d9d1629d h1:+1iMnMoPwJCW2heSAvvEJdak0YjPfjKFQyIRbWAqtn8=
-github.com/minisource/apiclients v0.0.0-20250113173457-a779d9d1629d/go.mod h1:5ewus8tpzfSYBxWisKtJh9Pzw6XzuPxVXXzdTp8bnyI=
-github.com/minisource/common_go v0.0.4-0.20250113200259-26a159b7ff86 h1:C982mzVCwyTee3if3BoE4S0Em1kF9j7G3Pr1bO7SLW0=
-github.com/minisource/common_go v0.0.4-0.20250113200259-26a159b7ff86/go.mod h1:QHtY+PpEIrDv3BJOnI/Uq5gBRN6+407gxVjRjZTQqHc=
+github.com/minisource/apiclients v0.0.0-20250118132743-0215151163e3 h1:I6ZVa1AXAYMdHufF5yOYS310cZA3w2cPvaAxC4v76X4=
+github.com/minisource/apiclients v0.0.0-20250118132743-0215151163e3/go.mod h1:MjyZXyueq6DM+rAKkDAtK+U0gZeXQsefnhi/0wT0K9k=
+github.com/minisource/common_go v0.0.4-0.20250118132851-a278430f21c3 h1:TSm31aRusoh+LYpj/lZndUcPzH2oRoCSoRqp/EUvOKU=
+github.com/minisource/common_go v0.0.4-0.20250118132851-a278430f21c3/go.mod h1:enMbmLpYZM2z22P4HFUUCIDXV4kWr0M4lqxOByVfEtk=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
