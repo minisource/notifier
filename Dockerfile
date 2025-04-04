@@ -28,8 +28,8 @@ WORKDIR /app
 # Copy the compiled binary from the builder stage
 COPY --from=builder /app/main .
 
-# Expose port 80 to the outside world
-EXPOSE 5000
+# # Expose port 80 to the outside world
+# EXPOSE 5000
 
 # Command to run the executable
 CMD ["./main"]

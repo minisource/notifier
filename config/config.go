@@ -1,29 +1,27 @@
 package config
 
 import (
-	"fmt"
+	"errors"
 	"log"
 	"os"
-	"strings"
 
-	"github.com/caarlos0/env/v10"
 	"github.com/minisource/common_go/logging"
+	"github.com/spf13/viper"
 )
 
 type Config struct {
 	Server ServerConfig
 	// Postgres PostgresConfig
-	Cors     CorsConfig
-	Logger   logging.LoggerConfig
-	SMS      SMSConfig
-	OAUTHURL string `env:"APICLIENTS_OAUTH_URL"`
+	Cors   CorsConfig
+	Logger logging.LoggerConfig
+	SMS    SMSConfig
 }
 
 type ServerConfig struct {
-	InternalPort string `env:"SERVER_INTERNAL_PORT"`
-	ExternalPort string `env:"SERVER_EXTERNAL_PORT"`
-	RunMode      string `env:"SERVER_RUN_MODE"`
-	Name         string `env:"SERVER_NAME"`
+	InternalPort string
+	ExternalPort string
+	RunMode      string
+	Name         string
 }
 
 // type PostgresConfig struct {
@@ -39,63 +37,93 @@ type ServerConfig struct {
 // }
 
 type CorsConfig struct {
-	AllowOrigins string `env:"CORS_ALLOW_ORIGINS"`
+	AllowOrigins string
 }
 
 type SMSConfig struct {
 	Providers       []SMSProviderConfig
-	DefualtProvider string `env:"SMS_Defualt_Provider"`
-	NotSendSms      bool   `env:"SMS_NOT_SEND_SMS"`
+	DefualtProvider string
+	NotEnabled      bool
 }
 
 type SMSProviderConfig struct {
-	Provider string `env:"SMS_PROVIDER"`
-	ApiKey   string `env:"SMS_API_KEY"`
+	Provider  string
+	ApiKey    string
+	AccessId  string
+	AccessKey string
+	Sign      string
+	Template  string
 }
 
-// LoadConfig loads configuration from environment variables
 func GetConfig() *Config {
-	cfg := &Config{}
-	if err := env.Parse(cfg); err != nil {
-		log.Fatalf("Error in parse config %v", err)
-		panic(err)
+	cfgPath := getConfigPath(os.Getenv("APP_ENV"))
+	v, err := LoadConfig(cfgPath, "yml")
+	if err != nil {
+		log.Fatalf("Error in load config %v", err)
 	}
 
-	// Handle SMS Providers and API Keys parsing
-	smsProviders := os.Getenv("SMS_PROVIDERS")
-	if smsProviders != "" {
-		smsApiKeys := os.Getenv("SMS_API_KEYS")
-		if smsApiKeys != "" {
-			providers := strings.Split(smsProviders, ",")
-			apiKeys := strings.Split(smsApiKeys, ",")
+	cfg, err := ParseConfig(v)
+	envPort := os.Getenv("PORT")
+	if envPort != "" {
+		cfg.Server.ExternalPort = envPort
+		log.Printf("Set external port from environment -> %s", cfg.Server.ExternalPort)
+	} else {
+		cfg.Server.ExternalPort = cfg.Server.InternalPort
+		log.Printf("Set external port from environment -> %s", cfg.Server.ExternalPort)
+	}
 
-			if len(providers) != len(apiKeys) {
-				log.Fatalf("SMS_PROVIDERS and SMS_API_KEYS must have the same length")
-				return nil
-			}
-
-			var smsConfigs []SMSProviderConfig
-			for i := 0; i < len(providers); i++ {
-				smsConfigs = append(smsConfigs, SMSProviderConfig{
-					Provider: providers[i],
-					ApiKey:   apiKeys[i],
-				})
-			}
-			cfg.SMS.Providers = smsConfigs
-		}
+	if err != nil {
+		log.Fatalf("Error in parse config %v", err)
 	}
 
 	return cfg
 }
 
-// GetApiKeyByProvider returns the API key for the given provider
-func (cfg *SMSConfig) GetApiKeyByProvider(provider string) (string, error) {
-	// Iterate over the SMS configurations
-	for _, sms := range cfg.Providers {
-		if strings.EqualFold(sms.Provider, provider) {
-			return sms.ApiKey, nil
-		}
+func ParseConfig(v *viper.Viper) (*Config, error) {
+	var cfg Config
+	err := v.Unmarshal(&cfg)
+	if err != nil {
+		log.Printf("Unable to parse config: %v", err)
+		return nil, err
 	}
 
-	return "", fmt.Errorf("API key not found for provider: %s", provider)
+	return &cfg, nil
+}
+
+func LoadConfig(filename string, fileType string) (*viper.Viper, error) {
+	v := viper.New()
+	v.SetConfigType(fileType)
+	v.SetConfigName(filename)
+	v.AddConfigPath(".")
+	v.AutomaticEnv()
+	err := v.ReadInConfig()
+	if err != nil {
+		log.Printf("Unable to read config: %v", err)
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			return nil, errors.New("config file not found")
+		}
+
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func getConfigPath(env string) string {
+	if env == "docker" {
+		return "/app/config/config-docker.yml"
+	} else if env == "production" {
+		return "../../config/config-production.yml"
+	} else {
+		return "../../config/config-development.yml"
+	}
+}
+
+func (cfg *SMSConfig) GetProviderConfig(providerName string) (*SMSProviderConfig, error) {
+	for _, provider := range cfg.Providers {
+		if provider.Provider == providerName {
+			return &provider, nil
+		}
+	}
+	return nil, errors.New("provider not found")
 }
