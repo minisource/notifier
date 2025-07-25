@@ -113,9 +113,9 @@ func getConfigPath(env string) string {
 	if env == "docker" {
 		return "/app/config/config-docker.yml"
 	} else if env == "production" {
-		return "../../config/config-production.yml"
+		return "/config/config-production.yml"
 	} else {
-		return "../../config/config-development.yml"
+		return "/config/config-development.yml"
 	}
 }
 
