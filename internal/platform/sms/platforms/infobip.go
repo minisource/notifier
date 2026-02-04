@@ -69,9 +69,7 @@ func (c *InfobipClient) SendMessage(param map[string]string, targetPhoneNumber .
 	if strings.HasPrefix(mobile, "0") {
 		mobile = "886" + mobile[1:]
 	}
-	if strings.HasPrefix(mobile, "+") {
-		mobile = mobile[1:]
-	}
+	mobile = strings.TrimPrefix(mobile, "+")
 
 	endpoint := fmt.Sprintf("%s/sms/2/text/advanced", c.baseUrl)
 	text := fmt.Sprintf(c.template, code)

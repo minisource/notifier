@@ -1,0 +1,186 @@
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"log"
+	"os"
+
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+)
+
+/*
+Ensure SMS Templates Migration
+
+This script checks if the sms_templates table exists and creates it if missing.
+It handles the case where initial migrations (000001) may have been skipped or failed,
+but we still need the sms_templates (000002) to function.
+
+Usage:
+  go run scripts/ensure_sms_templates.go
+*/
+
+func main() {
+	// Load .env file if exists
+	_ = godotenv.Load()
+
+	// Build database URL
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = buildDatabaseURL()
+	}
+	if dbURL == "" {
+		log.Fatal("❌ DATABASE_URL required. Set in .env or environment")
+	}
+
+	// Connect to database
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("❌ Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		log.Fatalf("❌ Failed to ping database: %v", err)
+	}
+
+	fmt.Println("✅ Connected to database")
+
+	// Check if sms_templates table exists
+	var exists bool
+	err = db.QueryRow(`
+		SELECT EXISTS (
+			SELECT FROM information_schema.tables 
+			WHERE table_schema = 'public' 
+			AND table_name = 'sms_templates'
+		);
+	`).Scan(&exists)
+
+	if err != nil {
+		log.Fatalf("❌ Failed to check table existence: %v", err)
+	}
+
+	if exists {
+		fmt.Println("✅ sms_templates table already exists")
+		return
+	}
+
+	fmt.Println("📝 Creating sms_templates table...")
+
+	// Create the table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS sms_templates (
+			id SERIAL PRIMARY KEY,
+			template_key VARCHAR(100) NOT NULL UNIQUE,
+			provider VARCHAR(50) NOT NULL,
+			provider_template_id VARCHAR(100) NOT NULL,
+			description TEXT,
+			token_mapping JSONB NOT NULL DEFAULT '{}',
+			is_active BOOLEAN NOT NULL DEFAULT true,
+			created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+			CONSTRAINT sms_templates_template_key_provider_unique UNIQUE (template_key, provider)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_sms_templates_template_key ON sms_templates(template_key);
+		CREATE INDEX IF NOT EXISTS idx_sms_templates_provider ON sms_templates(provider);
+		CREATE INDEX IF NOT EXISTS idx_sms_templates_is_active ON sms_templates(is_active);
+		CREATE INDEX IF NOT EXISTS idx_sms_templates_token_mapping ON sms_templates USING gin(token_mapping);
+	`)
+
+	if err != nil {
+		log.Fatalf("❌ Failed to create table: %v", err)
+	}
+
+	fmt.Println("✅ Created sms_templates table")
+
+	// Check if we need to seed templates
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM sms_templates").Scan(&count)
+	if err != nil {
+		log.Fatalf("❌ Failed to count templates: %v", err)
+	}
+
+	if count > 0 {
+		fmt.Printf("✅ Found %d existing templates\n", count)
+		return
+	}
+
+	fmt.Println("📝 Seeding default SMS templates...")
+
+	templates := []struct {
+		key         string
+		provider    string
+		templateID  string
+		description string
+		tokenMap    string
+	}{
+		{
+			key:         "otp_verify",
+			provider:    "kavenegar",
+			templateID:  "verify",
+			description: "OTP verification code template",
+			tokenMap:    `{"code": "token"}`,
+		},
+		{
+			key:         "welcome",
+			provider:    "kavenegar",
+			templateID:  "welcome",
+			description: "Welcome message template",
+			tokenMap:    `{"name": "token"}`,
+		},
+		{
+			key:         "order_placed",
+			provider:    "kavenegar",
+			templateID:  "orderplaced",
+			description: "Order confirmation template",
+			tokenMap:    `{"order_id": "token", "amount": "token2"}`,
+		},
+		{
+			key:         "payment_success",
+			provider:    "kavenegar",
+			templateID:  "paymentsuccess",
+			description: "Payment success notification",
+			tokenMap:    `{"amount": "token", "transaction_id": "token2"}`,
+		},
+	}
+
+	for _, tmpl := range templates {
+		_, err := db.Exec(`
+			INSERT INTO sms_templates (template_key, provider, provider_template_id, description, token_mapping)
+			VALUES ($1, $2, $3, $4, $5::jsonb)
+			ON CONFLICT (template_key, provider) DO NOTHING
+		`, tmpl.key, tmpl.provider, tmpl.templateID, tmpl.description, tmpl.tokenMap)
+
+		if err != nil {
+			log.Printf("⚠️  Failed to insert template %s: %v", tmpl.key, err)
+		} else {
+			fmt.Printf("✅ Seeded template: %s\n", tmpl.key)
+		}
+	}
+
+	fmt.Println("✅ All templates seeded successfully!")
+}
+
+func buildDatabaseURL() string {
+	host := os.Getenv("POSTGRES_HOST")
+	port := os.Getenv("POSTGRES_PORT")
+	user := os.Getenv("POSTGRES_USER")
+	password := os.Getenv("POSTGRES_PASSWORD")
+	dbname := os.Getenv("POSTGRES_DBNAME")
+	sslmode := os.Getenv("POSTGRES_SSLMODE")
+
+	if host == "" || user == "" || dbname == "" {
+		return ""
+	}
+	if port == "" {
+		port = "5434"
+	}
+	if sslmode == "" {
+		sslmode = "disable"
+	}
+
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		user, password, host, port, dbname, sslmode)
+}

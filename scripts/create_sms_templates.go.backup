@@ -1,0 +1,85 @@
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"log"
+	"os"
+
+	_ "github.com/lib/pq"
+)
+
+func main() {
+	// Get database URL from environment or use default
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgres://postgres:postgres@localhost:5434/notifier_db?sslmode=disable"
+	}
+
+	// Connect to database
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	// Create sms_templates table
+	createTableSQL := `
+	CREATE TABLE IF NOT EXISTS sms_templates (
+		id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+		tenant_id UUID,
+		key VARCHAR(100) NOT NULL,
+		provider VARCHAR(50) NOT NULL,
+		provider_template VARCHAR(255),
+		message_template TEXT,
+		token_mapping JSONB NOT NULL DEFAULT '{}',
+		description TEXT,
+		is_active BOOLEAN DEFAULT TRUE,
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		deleted_at TIMESTAMP WITH TIME ZONE
+	);
+	`
+
+	_, err = db.Exec(createTableSQL)
+	if err != nil {
+		log.Fatalf("Failed to create table: %v", err)
+	}
+
+	fmt.Println("✅ sms_templates table created successfully")
+
+	// Create indexes
+	createIndexSQL := `
+	CREATE INDEX IF NOT EXISTS idx_sms_templates_key_provider ON sms_templates(key, provider);
+	CREATE INDEX IF NOT EXISTS idx_sms_templates_tenant ON sms_templates(tenant_id);
+	CREATE INDEX IF NOT EXISTS idx_sms_templates_deleted_at ON sms_templates(deleted_at);
+	`
+
+	_, err = db.Exec(createIndexSQL)
+	if err != nil {
+		log.Fatalf("Failed to create indexes: %v", err)
+	}
+
+	fmt.Println("✅ Indexes created successfully")
+
+	// Insert seed data
+	seedDataSQL := `
+	INSERT INTO sms_templates (key, provider, provider_template, message_template, token_mapping, description, is_active)
+	VALUES
+		('verify', 'kavenegar', 'verify', NULL, '{"code": "token"}', 'OTP verification code', true),
+		('welcome', 'kavenegar', 'welcome', NULL, '{"name": "token"}', 'Welcome message', true),
+		('order_placed', 'kavenegar', 'orderPlaced', NULL, '{"orderNumber": "token", "amount": "token2"}', 'Order placed notification', true),
+		('payment_success', 'kavenegar', 'paymentSuccess', NULL, '{"orderNumber": "token", "amount": "token2"}', 'Payment success notification', true)
+	ON CONFLICT DO NOTHING;
+	`
+
+	result, err := db.Exec(seedDataSQL)
+	if err != nil {
+		log.Printf("Warning: Failed to insert seed data: %v", err)
+	} else {
+		rows, _ := result.RowsAffected()
+		fmt.Printf("✅ Inserted %d seed templates\n", rows)
+	}
+
+	fmt.Println("\n🎉 Migration complete!")
+}

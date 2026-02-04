@@ -1,0 +1,86 @@
+# Notifier Service - Development Docker Compose
+# Usage: docker compose -f docker-compose.dev.yml up -d
+# Note: This only starts infrastructure services, not the app (use go run or air for hot reload)
+
+services:
+  notifier-postgres:
+    image: postgres:16-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-notifier}-postgres
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-notifier_db}
+    ports:
+      - "${POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - notifier-postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # networks:
+    #   - notifier-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-notifier_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  notifier-redis:
+    image: redis:7-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-notifier}-redis
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6381}:6379"
+    volumes:
+      - notifier-redis-data:/data
+    # networks:
+    #   - notifier-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # Optional: MailHog for email testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-notifier}-mailhog
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    # networks:
+    #   - notifier-dev-network
+    profiles:
+      - tools
+
+  # Optional: Adminer for database management
+  adminer:
+    image: adminer:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-notifier}-adminer
+    ports:
+      - "8083:8080"
+    # networks:
+    #   - notifier-dev-network
+    depends_on:
+      - notifier-postgres
+    profiles:
+      - tools
+
+volumes:
+  notifier-postgres-data:
+    driver: local
+  notifier-redis-data:
+    driver: local
+
+# networks:
+#   notifier-dev-network:
+#     driver: bridge
+#     name: minisource-dev

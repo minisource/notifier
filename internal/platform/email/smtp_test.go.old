@@ -1,0 +1,92 @@
+package email
+
+import (
+	"context"
+	"os"
+	"testing"
+
+	"github.com/minisource/go-common/logging"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestSMTPProvider(t *testing.T) {
+	// Skip if no SMTP config
+	smtpHost := os.Getenv("SMTP_HOST")
+	if smtpHost == "" {
+		t.Skip("SMTP_HOST not set, skipping integration test")
+	}
+
+	logger := logging.NewZapLogger(logging.LogConfig{Level: "debug"})
+
+	config := EmailProviderConfig{
+		Provider: "smtp",
+		Host:     smtpHost,
+		Port:     587,
+		Username: os.Getenv("SMTP_USERNAME"),
+		Password: os.Getenv("SMTP_PASSWORD"),
+		From:     os.Getenv("SMTP_FROM"),
+	}
+
+	provider, err := NewEmailProvider(config, logger)
+	require.NoError(t, err)
+	require.NotNil(t, provider)
+
+	t.Run("SendEmail", func(t *testing.T) {
+		testEmail := os.Getenv("TEST_EMAIL")
+		if testEmail == "" {
+			t.Skip("TEST_EMAIL not set")
+		}
+
+		ctx := context.Background()
+		messageID, err := provider.Send(
+			ctx,
+			testEmail,
+			"Test Email",
+			"<p>This is a test email from automated test</p>",
+		)
+
+		if err != nil {
+			t.Logf("Send failed: %v", err)
+		} else {
+			assert.NotEmpty(t, messageID)
+			t.Logf("Email sent successfully, ID: %s", messageID)
+		}
+	})
+
+	t.Run("InvalidEmail", func(t *testing.T) {
+		ctx := context.Background()
+		_, err := provider.Send(ctx, "invalid-email", "Test", "Body")
+		assert.Error(t, err)
+	})
+}
+
+func TestEmailConfig(t *testing.T) {
+	logger := logging.NewZapLogger(logging.LogConfig{Level: "debug"})
+
+	t.Run("ValidSMTPConfig", func(t *testing.T) {
+		config := EmailProviderConfig{
+			Provider: "smtp",
+			Host:     "smtp.gmail.com",
+			Port:     587,
+			Username: "test@example.com",
+			Password: "password",
+			From:     "noreply@example.com",
+		}
+
+		provider, err := NewEmailProvider(config, logger)
+		assert.NoError(t, err)
+		assert.NotNil(t, provider)
+	})
+
+	t.Run("MissingHost", func(t *testing.T) {
+		config := EmailProviderConfig{
+			Provider: "smtp",
+			Port:     587,
+		}
+
+		provider, err := NewEmailProvider(config, logger)
+		assert.Error(t, err)
+		assert.Nil(t, provider)
+	})
+}

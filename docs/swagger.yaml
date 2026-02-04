@@ -1,0 +1,585 @@
+basePath: /api
+definitions:
+  dto.BatchNotificationRequest:
+    properties:
+      notifications:
+        items:
+          $ref: '#/definitions/dto.CreateNotificationRequest'
+        maxItems: 100
+        minItems: 1
+        type: array
+    required:
+    - notifications
+    type: object
+  dto.CreateNotificationRequest:
+    properties:
+      body:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      priority:
+        $ref: '#/definitions/models.NotificationPriority'
+      recipientEmail:
+        type: string
+      recipientId:
+        type: string
+      recipientPhone:
+        type: string
+      scheduledAt:
+        type: string
+      subject:
+        type: string
+      templateId:
+        type: string
+      type:
+        $ref: '#/definitions/models.NotificationType'
+      userId:
+        type: string
+    required:
+    - body
+    - type
+    - userId
+    type: object
+  dto.CreateTemplateRequest:
+    properties:
+      body:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      provider:
+        type: string
+      providerTemplate:
+        type: string
+      subject:
+        type: string
+      type:
+        $ref: '#/definitions/models.NotificationType'
+      variables:
+        items:
+          type: string
+        type: array
+    required:
+    - body
+    - name
+    - type
+    type: object
+  dto.NotificationResponse:
+    properties:
+      body:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: string
+      priority:
+        $ref: '#/definitions/models.NotificationPriority'
+      readAt:
+        type: string
+      recipientEmail:
+        type: string
+      recipientPhone:
+        type: string
+      sentAt:
+        type: string
+      status:
+        $ref: '#/definitions/models.NotificationStatus'
+      subject:
+        type: string
+      type:
+        $ref: '#/definitions/models.NotificationType'
+      userId:
+        type: string
+    type: object
+  dto.PaginatedNotificationResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.NotificationResponse'
+        type: array
+      page:
+        type: integer
+      pageSize:
+        type: integer
+      total:
+        type: integer
+      totalPages:
+        type: integer
+    type: object
+  dto.TemplateResponse:
+    properties:
+      body:
+        type: string
+      createdAt:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      isActive:
+        type: boolean
+      name:
+        type: string
+      subject:
+        type: string
+      type:
+        $ref: '#/definitions/models.NotificationType'
+    type: object
+  dto.UpdatePreferenceRequest:
+    properties:
+      allowDigest:
+        type: boolean
+      allowInstant:
+        type: boolean
+      categorySettings:
+        additionalProperties:
+          type: boolean
+        type: object
+      digestFrequency:
+        type: string
+      isEnabled:
+        type: boolean
+      type:
+        $ref: '#/definitions/models.NotificationType'
+    required:
+    - type
+    type: object
+  models.NotificationPriority:
+    enum:
+    - low
+    - normal
+    - high
+    - urgent
+    type: string
+    x-enum-varnames:
+    - NotificationPriorityLow
+    - NotificationPriorityNormal
+    - NotificationPriorityHigh
+    - NotificationPriorityUrgent
+  models.NotificationStatus:
+    enum:
+    - pending
+    - sending
+    - sent
+    - failed
+    - retrying
+    - canceled
+    type: string
+    x-enum-varnames:
+    - NotificationStatusPending
+    - NotificationStatusSending
+    - NotificationStatusSent
+    - NotificationStatusFailed
+    - NotificationStatusRetrying
+    - NotificationStatusCanceled
+  models.NotificationType:
+    enum:
+    - sms
+    - email
+    - push
+    - in_app
+    type: string
+    x-enum-varnames:
+    - NotificationTypeSMS
+    - NotificationTypeEmail
+    - NotificationTypePush
+    - NotificationTypeInApp
+host: 127.0.0.1:9002
+info:
+  contact:
+    email: support@minisource.com
+    name: API Support
+  description: Notification Service for Minisource - Handles Email, SMS, Push, and
+    In-App notifications
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Notifier Service API
+  version: "2.0"
+paths:
+  /v1/health/:
+    get:
+      consumes:
+      - application/json
+      description: Health Check
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Failed
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Health Check
+      tags:
+      - health
+  /v1/notifications:
+    post:
+      consumes:
+      - application/json
+      description: Create a new notification
+      parameters:
+      - description: Notification data
+        in: body
+        name: notification
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateNotificationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.NotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create notification
+      tags:
+      - Notifications
+  /v1/notifications/{notificationId}/read:
+    put:
+      consumes:
+      - application/json
+      description: Mark a notification as read
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Mark notification as read
+      tags:
+      - Notifications
+  /v1/notifications/batch:
+    post:
+      consumes:
+      - application/json
+      description: Create multiple notifications at once
+      parameters:
+      - description: Batch notification data
+        in: body
+        name: batch
+        required: true
+        schema:
+          $ref: '#/definitions/dto.BatchNotificationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create batch notifications
+      tags:
+      - Notifications
+  /v1/notifications/user/{userId}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated notifications for a user
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedNotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get user notifications
+      tags:
+      - Notifications
+  /v1/notifications/user/{userId}/unread:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve unread notifications for a user
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedNotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get unread notifications
+      tags:
+      - Notifications
+  /v1/preferences/user/{userId}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all notification preferences for a user
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get user notification preferences
+      tags:
+      - Preferences
+    put:
+      consumes:
+      - application/json
+      description: Update or create notification preference for a user
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - description: Preference data
+        in: body
+        name: preference
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdatePreferenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update notification preference
+      tags:
+      - Preferences
+  /v1/templates:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all notification templates
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get all templates
+      tags:
+      - Templates
+    post:
+      consumes:
+      - application/json
+      description: Create a new notification template
+      parameters:
+      - description: Template data
+        in: body
+        name: template
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.TemplateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create notification template
+      tags:
+      - Templates
+  /v1/templates/{templateId}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a notification template
+      parameters:
+      - description: Template ID
+        in: path
+        name: templateId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete template
+      tags:
+      - Templates
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a specific notification template
+      parameters:
+      - description: Template ID
+        in: path
+        name: templateId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TemplateResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get template by ID
+      tags:
+      - Templates
+    put:
+      consumes:
+      - application/json
+      description: Update an existing notification template
+      parameters:
+      - description: Template ID
+        in: path
+        name: templateId
+        required: true
+        type: string
+      - description: Template data
+        in: body
+        name: template
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update template
+      tags:
+      - Templates
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

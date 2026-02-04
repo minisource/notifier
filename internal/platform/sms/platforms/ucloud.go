@@ -63,7 +63,7 @@ func (c *UcloudClient) SendMessage(param map[string]string, targetPhoneNumber ..
 		return err
 	}
 	if response.RetCode != 0 {
-		return fmt.Errorf(response.Message)
+		return fmt.Errorf("ucloud SMS error: %s", response.Message)
 	}
 	return nil
 }

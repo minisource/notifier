@@ -63,9 +63,7 @@ func (c *GCCPAYClient) SendMessage(param map[string]string, targetPhoneNumber ..
 	reqParams := make(map[string]params)
 
 	for _, mobile := range targetPhoneNumber {
-		if strings.HasPrefix(mobile, "+") {
-			mobile = mobile[1:]
-		}
+		mobile = strings.TrimPrefix(mobile, "+")
 		randomString, err := RandStringBytesCrypto(16)
 		if err != nil {
 			return fmt.Errorf("SMS key generation failed")

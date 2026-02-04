@@ -1,35 +1,39 @@
-# Use the latest Golang Alpine image for building the Go app
-FROM golang:alpine3.21 as builder
+# Build stage
+FROM golang:1.23.4-alpine AS builder
 
-# Set the Current Working Directory inside the container
+# Install dependencies
+RUN apk add --no-cache git
+
 WORKDIR /app
 
-# Copy go mod and sum files
+# Copy go mod files
 COPY go.mod go.sum ./
 
-# Download all dependencies. Dependencies will be cached if the go.mod and go.sum files are not changed
+# Download dependencies
 RUN go mod download
 
-# Copy the source code from the current directory to the Working Directory inside the container
+# Copy source code
 COPY . .
 
-# List files in the container for debugging
-RUN ls -R /app
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/server
 
-# Build the Go app by specifying the correct path for main.go
-RUN go build -o /app/main ./cmd/server/main.go
-
-# Create a smaller image for running the app
+# Final stage
 FROM alpine:latest
 
-# Set the Current Working Directory inside the container
-WORKDIR /app
+RUN apk --no-cache add ca-certificates tzdata
 
-# Copy the compiled binary from the builder stage
+WORKDIR /root/
+
+# Copy the binary from builder
 COPY --from=builder /app/main .
+COPY --from=builder /app/config ./config
 
-# # Expose port 80 to the outside world
-# EXPOSE 5000
+# Expose port
+EXPOSE 9002
 
-# Command to run the executable
+# Set environment variable
+ENV APP_ENV=docker
+
+# Run the application
 CMD ["./main"]

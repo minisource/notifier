@@ -69,7 +69,11 @@ func (c *TencentClient) SendMessage(param map[string]string, targetPhoneNumber .
 		return err
 	}
 	if len(response.Response.SendStatusSet) > 0 && response.Response.SendStatusSet[0].Code != nil && *response.Response.SendStatusSet[0].Code != "Ok" {
-		return fmt.Errorf(*response.Response.SendStatusSet[0].Message)
+		msg := "SMS send failed"
+		if response.Response.SendStatusSet[0].Message != nil {
+			msg = *response.Response.SendStatusSet[0].Message
+		}
+		return fmt.Errorf("tencent SMS error: %s", msg)
 	}
 	return err
 }

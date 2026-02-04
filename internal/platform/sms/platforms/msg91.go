@@ -32,9 +32,7 @@ func (m *Msg91Client) SendMessage(param map[string]string, targetPhoneNumber ...
 	url := "https://control.msg91.com/api/v5/flow/"
 
 	for _, mobile := range targetPhoneNumber {
-		if strings.HasPrefix(mobile, "+") {
-			mobile = mobile[1:]
-		}
+		mobile = strings.TrimPrefix(mobile, "+")
 
 		payload, err := buildPayload(m.templateId, m.senderId, "0", mobile, param)
 		if err != nil {

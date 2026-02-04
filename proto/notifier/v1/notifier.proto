@@ -1,0 +1,676 @@
+syntax = "proto3";
+
+package notifier.v1;
+
+option go_package = "github.com/minisource/notifier/proto/notifier/v1;notifierv1";
+
+import "google/protobuf/timestamp.proto";
+
+// NotificationService provides notification management APIs
+service NotificationService {
+  // Create a single notification
+  rpc CreateNotification(CreateNotificationRequest) returns (CreateNotificationResponse);
+  
+  // Create multiple notifications in batch
+  rpc CreateBatchNotifications(CreateBatchNotificationsRequest) returns (CreateBatchNotificationsResponse);
+  
+  // Get notifications for a user
+  rpc GetUserNotifications(GetUserNotificationsRequest) returns (GetUserNotificationsResponse);
+  
+  // Get unread notifications for a user
+  rpc GetUnreadNotifications(GetUnreadNotificationsRequest) returns (GetUnreadNotificationsResponse);
+  
+  // Mark a notification as read
+  rpc MarkAsRead(MarkAsReadRequest) returns (MarkAsReadResponse);
+  
+  // Get notification by ID
+  rpc GetNotification(GetNotificationRequest) returns (GetNotificationResponse);
+  
+  // Send SMS (legacy support)
+  rpc SendSMS(SendSMSRequest) returns (SendSMSResponse);
+  
+  // Send Email
+  rpc SendEmail(SendEmailRequest) returns (SendEmailResponse);
+  
+  // Stream notifications (real-time)
+  rpc StreamNotifications(StreamNotificationsRequest) returns (stream Notification);
+}
+
+// TemplateService provides notification template management
+service TemplateService {
+  // Create a notification template
+  rpc CreateTemplate(CreateTemplateRequest) returns (CreateTemplateResponse);
+  
+  // Get template by ID
+  rpc GetTemplate(GetTemplateRequest) returns (GetTemplateResponse);
+  
+  // Get all templates
+  rpc GetAllTemplates(GetAllTemplatesRequest) returns (GetAllTemplatesResponse);
+  
+  // Update a template
+  rpc UpdateTemplate(UpdateTemplateRequest) returns (UpdateTemplateResponse);
+  
+  // Delete a template
+  rpc DeleteTemplate(DeleteTemplateRequest) returns (DeleteTemplateResponse);
+}
+
+// PreferenceService provides user notification preferences management
+service PreferenceService {
+  // Get user preferences
+  rpc GetUserPreferences(GetUserPreferencesRequest) returns (GetUserPreferencesResponse);
+  
+  // Update user preference
+  rpc UpdatePreference(UpdatePreferenceRequest) returns (UpdatePreferenceResponse);
+}
+
+// AdminService provides administrative APIs for notification management
+service AdminService {
+  // Get notification logs with filters
+  rpc GetNotificationLogs(GetNotificationLogsRequest) returns (GetNotificationLogsResponse);
+  
+  // Get notification statistics
+  rpc GetStatistics(GetStatisticsRequest) returns (GetStatisticsResponse);
+  
+  // Get delivery statistics grouped by provider
+  rpc GetDeliveryStats(GetDeliveryStatsRequest) returns (GetDeliveryStatsResponse);
+  
+  // Retry failed notifications
+  rpc RetryFailedNotifications(RetryFailedNotificationsRequest) returns (RetryFailedNotificationsResponse);
+  
+  // Retry a specific notification
+  rpc RetryNotification(RetryNotificationRequest) returns (RetryNotificationResponse);
+  
+  // Cancel scheduled notification
+  rpc CancelNotification(CancelNotificationRequest) returns (CancelNotificationResponse);
+  
+  // Bulk delete notifications
+  rpc BulkDeleteNotifications(BulkDeleteNotificationsRequest) returns (BulkDeleteNotificationsResponse);
+  
+  // Get service client
+  rpc GetServiceClient(GetServiceClientRequest) returns (GetServiceClientResponse);
+  
+  // List all service clients
+  rpc ListServiceClients(ListServiceClientsRequest) returns (ListServiceClientsResponse);
+  
+  // Create service client
+  rpc CreateServiceClient(CreateServiceClientRequest) returns (CreateServiceClientResponse);
+  
+  // Update service client
+  rpc UpdateServiceClient(UpdateServiceClientRequest) returns (UpdateServiceClientResponse);
+  
+  // Delete service client
+  rpc DeleteServiceClient(DeleteServiceClientRequest) returns (DeleteServiceClientResponse);
+  
+  // Get failed notifications for retry
+  rpc GetFailedNotifications(GetFailedNotificationsRequest) returns (GetFailedNotificationsResponse);
+}
+
+// Notification types
+enum NotificationType {
+  NOTIFICATION_TYPE_UNSPECIFIED = 0;
+  NOTIFICATION_TYPE_SMS = 1;
+  NOTIFICATION_TYPE_EMAIL = 2;
+  NOTIFICATION_TYPE_PUSH = 3;
+  NOTIFICATION_TYPE_IN_APP = 4;
+}
+
+// Notification status
+enum NotificationStatus {
+  NOTIFICATION_STATUS_UNSPECIFIED = 0;
+  NOTIFICATION_STATUS_PENDING = 1;
+  NOTIFICATION_STATUS_SENDING = 2;
+  NOTIFICATION_STATUS_SENT = 3;
+  NOTIFICATION_STATUS_FAILED = 4;
+  NOTIFICATION_STATUS_RETRYING = 5;
+  NOTIFICATION_STATUS_CANCELED = 6;
+}
+
+// Notification priority
+enum NotificationPriority {
+  NOTIFICATION_PRIORITY_UNSPECIFIED = 0;
+  NOTIFICATION_PRIORITY_LOW = 1;
+  NOTIFICATION_PRIORITY_NORMAL = 2;
+  NOTIFICATION_PRIORITY_HIGH = 3;
+  NOTIFICATION_PRIORITY_URGENT = 4;
+}
+
+// Notification message
+message Notification {
+  string id = 1;
+  string user_id = 2;
+  NotificationType type = 3;
+  NotificationStatus status = 4;
+  NotificationPriority priority = 5;
+  
+  string recipient_email = 6;
+  string recipient_phone = 7;
+  string recipient_id = 8;
+  
+  string subject = 9;
+  string body = 10;
+  string metadata = 11;
+  
+  string template_id = 12;
+  
+  int32 retry_count = 13;
+  int32 max_retries = 14;
+  
+  string error_message = 15;
+  string provider = 16;
+  string provider_msg_id = 17;
+  
+  google.protobuf.Timestamp scheduled_at = 18;
+  google.protobuf.Timestamp sent_at = 19;
+  google.protobuf.Timestamp read_at = 20;
+  google.protobuf.Timestamp created_at = 21;
+  google.protobuf.Timestamp updated_at = 22;
+}
+
+// Create notification request
+message CreateNotificationRequest {
+  string user_id = 1;
+  NotificationType type = 2;
+  NotificationPriority priority = 3;
+  
+  string recipient_email = 4;
+  string recipient_phone = 5;
+  string recipient_id = 6;
+  
+  string subject = 7;
+  string body = 8;
+  map<string, string> metadata = 9;
+  
+  string template_id = 10;
+  google.protobuf.Timestamp scheduled_at = 11;
+}
+
+// Create notification response
+message CreateNotificationResponse {
+  string notification_id = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+// Create batch notifications request
+message CreateBatchNotificationsRequest {
+  repeated CreateNotificationRequest notifications = 1;
+}
+
+// Create batch notifications response
+message CreateBatchNotificationsResponse {
+  int32 success_count = 1;
+  int32 failed_count = 2;
+  repeated string success_ids = 3;
+  repeated string error_messages = 4;
+}
+
+// Get user notifications request
+message GetUserNotificationsRequest {
+  string user_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+// Get user notifications response
+message GetUserNotificationsResponse {
+  repeated Notification notifications = 1;
+  int64 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  int32 total_pages = 5;
+}
+
+// Get unread notifications request
+message GetUnreadNotificationsRequest {
+  string user_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+// Get unread notifications response
+message GetUnreadNotificationsResponse {
+  repeated Notification notifications = 1;
+  int64 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  int32 total_pages = 5;
+}
+
+// Mark as read request
+message MarkAsReadRequest {
+  string notification_id = 1;
+}
+
+// Mark as read response
+message MarkAsReadResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Get notification request
+message GetNotificationRequest {
+  string notification_id = 1;
+}
+
+// Get notification response
+message GetNotificationResponse {
+  Notification notification = 1;
+}
+
+// Send SMS request
+// For template-based providers (like Kavenegar), use template + tokens instead of body
+// Example tokens: {"token": "123456", "token2": "order_amount", "token3": "status"}
+message SendSMSRequest {
+  string to = 1;
+  string phone_number = 2;
+  string body = 3;  // Used as primary token if tokens map is empty
+  string template = 4;  // Template name e.g., "verify", "orderPlaced", "paymentSuccess"
+  map<string, string> tokens = 5;  // Token values: token, token2, token3, token10, token20
+}
+
+// Send SMS response
+message SendSMSResponse {
+  bool success = 1;
+  string message = 2;
+  string message_id = 3;
+}
+
+// Send email request
+message SendEmailRequest {
+  string to = 1;
+  string subject = 2;
+  string body = 3;
+  string template_id = 4;
+  map<string, string> variables = 5;
+}
+
+// Send email response
+message SendEmailResponse {
+  bool success = 1;
+  string message = 2;
+  string message_id = 3;
+}
+
+// Stream notifications request
+message StreamNotificationsRequest {
+  string user_id = 1;
+}
+
+// Template message
+message Template {
+  string id = 1;
+  string name = 2;
+  NotificationType type = 3;
+  string subject = 4;
+  string body = 5;
+  string description = 6;
+  repeated string variables = 7;
+  string provider = 8;
+  string provider_template = 9;
+  bool is_active = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+// Create template request
+message CreateTemplateRequest {
+  string name = 1;
+  NotificationType type = 2;
+  string subject = 3;
+  string body = 4;
+  string description = 5;
+  repeated string variables = 6;
+  string provider = 7;
+  string provider_template = 8;
+}
+
+// Create template response
+message CreateTemplateResponse {
+  string template_id = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+// Get template request
+message GetTemplateRequest {
+  string template_id = 1;
+}
+
+// Get template response
+message GetTemplateResponse {
+  Template template = 1;
+}
+
+// Get all templates request
+message GetAllTemplatesRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+}
+
+// Get all templates response
+message GetAllTemplatesResponse {
+  repeated Template templates = 1;
+  int64 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// Update template request
+message UpdateTemplateRequest {
+  string template_id = 1;
+  string name = 2;
+  NotificationType type = 3;
+  string subject = 4;
+  string body = 5;
+  string description = 6;
+  repeated string variables = 7;
+  string provider = 8;
+  string provider_template = 9;
+}
+
+// Update template response
+message UpdateTemplateResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Delete template request
+message DeleteTemplateRequest {
+  string template_id = 1;
+}
+
+// Delete template response
+message DeleteTemplateResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Preference message
+message Preference {
+  string id = 1;
+  string user_id = 2;
+  NotificationType type = 3;
+  bool is_enabled = 4;
+  bool allow_instant = 5;
+  bool allow_digest = 6;
+  string digest_frequency = 7;
+  map<string, bool> category_settings = 8;
+}
+
+// Get user preferences request
+message GetUserPreferencesRequest {
+  string user_id = 1;
+}
+
+// Get user preferences response
+message GetUserPreferencesResponse {
+  repeated Preference preferences = 1;
+}
+
+// Update preference request
+message UpdatePreferenceRequest {
+  string user_id = 1;
+  NotificationType type = 2;
+  bool is_enabled = 3;
+  bool allow_instant = 4;
+  bool allow_digest = 5;
+  string digest_frequency = 6;
+  map<string, bool> category_settings = 7;
+}
+
+// Update preference response
+message UpdatePreferenceResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// ========================================
+// Admin API Messages
+// ========================================
+
+// Get notification logs request
+message GetNotificationLogsRequest {
+  // Filters
+  string user_id = 1;
+  NotificationType type = 2;
+  NotificationStatus status = 3;
+  string provider = 4;
+  google.protobuf.Timestamp from_date = 5;
+  google.protobuf.Timestamp to_date = 6;
+  string search = 7; // Search in subject/body
+  
+  // Pagination
+  int32 page = 8;
+  int32 page_size = 9;
+  
+  // Sorting
+  string sort_by = 10;  // created_at, updated_at, sent_at
+  string sort_order = 11; // asc, desc
+}
+
+// Get notification logs response
+message GetNotificationLogsResponse {
+  repeated Notification notifications = 1;
+  int64 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  int32 total_pages = 5;
+}
+
+// Get statistics request
+message GetStatisticsRequest {
+  google.protobuf.Timestamp from_date = 1;
+  google.protobuf.Timestamp to_date = 2;
+  string group_by = 3; // hour, day, week, month
+}
+
+// Statistics data
+message Statistics {
+  int64 total_sent = 1;
+  int64 total_failed = 2;
+  int64 total_pending = 3;
+  int64 total_sms = 4;
+  int64 total_email = 5;
+  int64 total_push = 6;
+  int64 total_in_app = 7;
+  double success_rate = 8;
+  double failure_rate = 9;
+  map<string, int64> by_provider = 10;
+  map<string, int64> by_status = 11;
+  map<string, int64> by_date = 12;
+}
+
+// Get statistics response
+message GetStatisticsResponse {
+  Statistics statistics = 1;
+}
+
+// Get delivery stats request
+message GetDeliveryStatsRequest {
+  google.protobuf.Timestamp from_date = 1;
+  google.protobuf.Timestamp to_date = 2;
+  string provider = 3;
+  NotificationType type = 4;
+}
+
+// Provider stats
+message ProviderStats {
+  string provider = 1;
+  NotificationType type = 2;
+  int64 total_sent = 3;
+  int64 total_failed = 4;
+  int64 total_pending = 5;
+  double success_rate = 6;
+  double avg_delivery_time_seconds = 7;
+  int64 total_cost = 8; // in smallest currency unit
+}
+
+// Get delivery stats response
+message GetDeliveryStatsResponse {
+  repeated ProviderStats provider_stats = 1;
+}
+
+// Retry failed notifications request
+message RetryFailedNotificationsRequest {
+  google.protobuf.Timestamp from_date = 1;
+  google.protobuf.Timestamp to_date = 2;
+  NotificationType type = 3;
+  string provider = 4;
+  int32 max_retries = 5; // Max notifications to retry
+}
+
+// Retry failed notifications response
+message RetryFailedNotificationsResponse {
+  int32 total_retried = 1;
+  int32 success_count = 2;
+  int32 failed_count = 3;
+  repeated string retried_ids = 4;
+}
+
+// Retry notification request
+message RetryNotificationRequest {
+  string notification_id = 1;
+}
+
+// Retry notification response
+message RetryNotificationResponse {
+  bool success = 1;
+  string message = 2;
+  Notification notification = 3;
+}
+
+// Cancel notification request
+message CancelNotificationRequest {
+  string notification_id = 1;
+  string reason = 2;
+}
+
+// Cancel notification response
+message CancelNotificationResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Bulk delete notifications request
+message BulkDeleteNotificationsRequest {
+  repeated string notification_ids = 1;
+  // Or use filters
+  google.protobuf.Timestamp older_than = 2;
+  NotificationStatus status = 3;
+}
+
+// Bulk delete notifications response
+message BulkDeleteNotificationsResponse {
+  int32 deleted_count = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+// Service client message
+message ServiceClient {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string api_key = 4;
+  string api_secret = 5;
+  bool is_active = 6;
+  repeated string allowed_types = 7; // sms, email, push
+  int32 rate_limit_per_minute = 8;
+  int32 rate_limit_per_hour = 9;
+  int32 rate_limit_per_day = 10;
+  map<string, string> metadata = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+}
+
+// Get service client request
+message GetServiceClientRequest {
+  string client_id = 1;
+}
+
+// Get service client response
+message GetServiceClientResponse {
+  ServiceClient client = 1;
+}
+
+// List service clients request
+message ListServiceClientsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  bool active_only = 3;
+}
+
+// List service clients response
+message ListServiceClientsResponse {
+  repeated ServiceClient clients = 1;
+  int64 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// Create service client request
+message CreateServiceClientRequest {
+  string name = 1;
+  string description = 2;
+  repeated string allowed_types = 3;
+  int32 rate_limit_per_minute = 4;
+  int32 rate_limit_per_hour = 5;
+  int32 rate_limit_per_day = 6;
+  map<string, string> metadata = 7;
+}
+
+// Create service client response
+message CreateServiceClientResponse {
+  ServiceClient client = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+// Update service client request
+message UpdateServiceClientRequest {
+  string client_id = 1;
+  string name = 2;
+  string description = 3;
+  bool is_active = 4;
+  repeated string allowed_types = 5;
+  int32 rate_limit_per_minute = 6;
+  int32 rate_limit_per_hour = 7;
+  int32 rate_limit_per_day = 8;
+  map<string, string> metadata = 9;
+}
+
+// Update service client response
+message UpdateServiceClientResponse {
+  bool success = 1;
+  string message = 2;
+  ServiceClient client = 3;
+}
+
+// Delete service client request
+message DeleteServiceClientRequest {
+  string client_id = 1;
+}
+
+// Delete service client response
+message DeleteServiceClientResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Get failed notifications request
+message GetFailedNotificationsRequest {
+  google.protobuf.Timestamp from_date = 1;
+  google.protobuf.Timestamp to_date = 2;
+  NotificationType type = 3;
+  string provider = 4;
+  int32 page = 5;
+  int32 page_size = 6;
+}
+
+// Get failed notifications response
+message GetFailedNotificationsResponse {
+  repeated Notification notifications = 1;
+  int64 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}

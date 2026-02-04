@@ -1,0 +1,148 @@
+# Notifier Service - Production Docker Compose
+# Usage: docker compose -f docker-compose.prod.yml up -d
+
+services:
+  notifier:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - GO_VERSION=1.23
+    container_name: ${COMPOSE_PROJECT_NAME:-notifier}-service
+    env_file:
+      - .env
+    environment:
+      # Override for container networking
+      POSTGRES_HOST: notifier-postgres
+      REDIS_HOST: notifier-redis
+    expose:
+      - "${SERVER_PORT:-9002}"
+      - "${GRPC_PORT:-9003}"
+    depends_on:
+      notifier-postgres:
+        condition: service_healthy
+      notifier-redis:
+        condition: service_healthy
+    networks:
+      - notifier-internal
+      - minisource-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${SERVER_PORT:-9002}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  notifier-postgres:
+    image: postgres:16-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-notifier}-postgres
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-notifier_db}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.utf8"
+    # No ports exposed - internal network only
+    expose:
+      - "5432"
+    volumes:
+      - notifier-postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - notifier-internal
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-notifier_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+
+  notifier-redis:
+    image: redis:7-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-notifier}-redis
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD}
+    # No ports exposed - internal network only
+    expose:
+      - "6379"
+    volumes:
+      - notifier-redis-data:/data
+    networks:
+      - notifier-internal
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  notifier-postgres-data:
+    driver: local
+  notifier-redis-data:
+    driver: local
+
+networks:
+  # Internal network for service-to-database communication
+  notifier-internal:
+    driver: bridge
+    internal: true
+  # External network for service-to-service communication
+  minisource-network:
+    external: true

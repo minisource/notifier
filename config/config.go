@@ -1,20 +1,39 @@
 package config
 
 import (
-	"errors"
 	"log"
 	"os"
+	"strconv"
+	"sync"
 
-	"github.com/minisource/common_go/logging"
-	"github.com/spf13/viper"
+	"github.com/joho/godotenv"
+	"github.com/minisource/go-common/logging"
+)
+
+var (
+	cfg  *Config
+	once sync.Once
 )
 
 type Config struct {
-	Server ServerConfig
-	// Postgres PostgresConfig
-	Cors   CorsConfig
-	Logger logging.LoggerConfig
-	SMS    SMSConfig
+	Server    ServerConfig
+	Postgres  PostgresConfig
+	Cors      CorsConfig
+	Logger    logging.LoggerConfig
+	Worker    WorkerConfig
+	GRPC      GRPCConfig
+	Auth      AuthConfig
+	Database  DatabaseConfig
+	Kavenegar KavenegarConfig
+	Tracing   TracingConfig
+}
+
+type AuthConfig struct {
+	Enabled      bool
+	BaseURL      string
+	ClientID     string
+	ClientSecret string
+	JWTSecret    string
 }
 
 type ServerConfig struct {
@@ -24,106 +43,163 @@ type ServerConfig struct {
 	Name         string
 }
 
-// type PostgresConfig struct {
-// 	Host            string        `env:"POSTGRES_HOST"`
-// 	Port            string        `env:"POSTGRES_PORT"`
-// 	User            string        `env:"POSTGRES_USER"`
-// 	Password        string        `env:"POSTGRES_PASSWORD"`
-// 	DbName          string        `env:"POSTGRES_DBNAME"`
-// 	SSLMode         string        `env:"POSTGRES_SSLMODE"`
-// 	MaxIdleConns    int           `env:"POSTGRES_MAX_IDLE_CONNS"`
-// 	MaxOpenConns    int           `env:"POSTGRES_MAX_OPEN_CONNS"`
-// 	ConnMaxLifetime time.Duration `env:"POSTGRES_CONN_MAX_LIFETIME"`
-// }
+type PostgresConfig struct {
+	Host            string
+	Port            string
+	User            string
+	Password        string
+	DbName          string
+	SSLMode         string
+	MaxIdleConns    int
+	MaxOpenConns    int
+	ConnMaxLifetime int
+}
+
+type DatabaseConfig struct {
+	RunMigrations bool
+	RunSeedData   bool
+}
+
+type WorkerConfig struct {
+	NumWorkers     int
+	QueueSize      int
+	RetryMaxDelay  int
+	RetryBaseDelay int
+}
 
 type CorsConfig struct {
 	AllowOrigins string
 }
 
-type SMSConfig struct {
-	Providers       []SMSProviderConfig
-	DefualtProvider string
-	NotEnabled      bool
+type GRPCConfig struct {
+	Port    string
+	Enabled bool
 }
 
-type SMSProviderConfig struct {
-	Provider  string
-	ApiKey    string
-	AccessId  string
-	AccessKey string
-	Sign      string
-	Template  string
+// KavenegarConfig holds Kavenegar SMS provider configuration
+type KavenegarConfig struct {
+	Enabled  bool
+	APIKey   string
+	Template string // Template name for lookup API (e.g., "verify")
+}
+
+type TracingConfig struct {
+	Enabled     bool
+	JaegerURL   string
+	ServiceName string
 }
 
 func GetConfig() *Config {
-	cfgPath := getConfigPath(os.Getenv("APP_ENV"))
-	v, err := LoadConfig(cfgPath, "yml")
-	if err != nil {
-		log.Fatalf("Error in load config %v", err)
-	}
+	once.Do(func() {
+		if err := godotenv.Load(); err != nil {
+			log.Printf("Warning: .env file not found, using environment variables")
+		}
 
-	cfg, err := ParseConfig(v)
-	envPort := os.Getenv("PORT")
-	if envPort != "" {
-		cfg.Server.ExternalPort = envPort
-		log.Printf("Set external port from environment -> %s", cfg.Server.ExternalPort)
-	} else {
-		cfg.Server.ExternalPort = cfg.Server.InternalPort
-		log.Printf("Set external port from environment -> %s", cfg.Server.ExternalPort)
-	}
+		cfg = &Config{
+			Server: ServerConfig{
+				InternalPort: getEnv("SERVER_INTERNAL_PORT", "9002"),
+				ExternalPort: getEnv("SERVER_EXTERNAL_PORT", "9002"),
+				RunMode:      getEnv("SERVER_RUN_MODE", "development"),
+				Name:         getEnv("SERVER_NAME", "Notifier"),
+			},
+			Postgres: PostgresConfig{
+				Host:            getEnv("POSTGRES_HOST", "localhost"),
+				Port:            getEnv("POSTGRES_PORT", "5432"),
+				User:            getEnv("POSTGRES_USER", "postgres"),
+				Password:        getEnv("POSTGRES_PASSWORD", "postgres"),
+				DbName:          getEnv("POSTGRES_DBNAME", "notifier_db"),
+				SSLMode:         getEnv("POSTGRES_SSLMODE", "disable"),
+				MaxIdleConns:    getEnvAsInt("POSTGRES_MAX_IDLE_CONNS", 10),
+				MaxOpenConns:    getEnvAsInt("POSTGRES_MAX_OPEN_CONNS", 100),
+				ConnMaxLifetime: getEnvAsInt("POSTGRES_CONN_MAX_LIFETIME", 60),
+			},
+			Worker: WorkerConfig{
+				NumWorkers:     getEnvAsInt("WORKER_NUM_WORKERS", 10),
+				QueueSize:      getEnvAsInt("WORKER_QUEUE_SIZE", 1000),
+				RetryMaxDelay:  getEnvAsInt("WORKER_RETRY_MAX_DELAY", 300),
+				RetryBaseDelay: getEnvAsInt("WORKER_RETRY_BASE_DELAY", 5),
+			},
+			Cors: CorsConfig{
+				AllowOrigins: getEnv("CORS_ALLOW_ORIGINS", "*"),
+			},
+			Logger: logging.LoggerConfig{
+				FilePath:    getEnv("LOGGER_FILE_PATH", "logs/notifier.log"),
+				Encoding:    getEnv("LOGGER_ENCODING", "json"),
+				Level:       getEnv("LOGGER_LEVEL", "debug"),
+				Logger:      getEnv("LOGGER_TYPE", "zap"),
+				ConsoleOnly: getEnvAsBool("LOGGER_CONSOLE_ONLY", false),
+			},
+			GRPC: GRPCConfig{
+				Port:    getEnv("GRPC_PORT", "9003"),
+				Enabled: getEnvAsBool("GRPC_ENABLED", true),
+			},
+			Auth: AuthConfig{
+				Enabled:      getEnvAsBool("AUTH_ENABLED", true),
+				BaseURL:      getEnv("AUTH_BASE_URL", "http://localhost:9001"),
+				ClientID:     getEnv("AUTH_CLIENT_ID", ""),
+				ClientSecret: getEnv("AUTH_CLIENT_SECRET", ""),
+				JWTSecret:    getEnv("AUTH_JWT_SECRET", ""),
+			},
+			Database: DatabaseConfig{
+				RunMigrations: getEnvAsBool("DB_RUN_MIGRATIONS", true),
+				RunSeedData:   getEnvAsBool("DB_RUN_SEED_DATA", true),
+			},
+			Kavenegar: KavenegarConfig{
+				Enabled:  getEnvAsBool("KAVENEGAR_ENABLED", false),
+				APIKey:   getEnv("KAVENEGAR_API_KEY", ""),
+				Template: getEnv("KAVENEGAR_TEMPLATE", "verify"),
+			},
+			Tracing: TracingConfig{
+				Enabled:     getEnvAsBool("TRACING_ENABLED", false),
+				JaegerURL:   getEnv("JAEGER_URL", "http://localhost:14268/api/traces"),
+				ServiceName: getEnv("TRACING_SERVICE_NAME", "notifier-service"),
+			},
+		}
 
-	if err != nil {
-		log.Fatalf("Error in parse config %v", err)
-	}
+		if envPort := os.Getenv("PORT"); envPort != "" {
+			cfg.Server.ExternalPort = envPort
+			log.Printf("Set external port from PORT environment variable: %s", cfg.Server.ExternalPort)
+		}
+
+		log.Printf("Configuration loaded successfully")
+		log.Printf("Server will run on port: %s", cfg.Server.InternalPort)
+		if cfg.GRPC.Enabled {
+			log.Printf("gRPC server will run on port: %s", cfg.GRPC.Port)
+		}
+	})
 
 	return cfg
 }
 
-func ParseConfig(v *viper.Viper) (*Config, error) {
-	var cfg Config
-	err := v.Unmarshal(&cfg)
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvAsInt(key string, defaultValue int) int {
+	valueStr := os.Getenv(key)
+	if valueStr == "" {
+		return defaultValue
+	}
+	value, err := strconv.Atoi(valueStr)
 	if err != nil {
-		log.Printf("Unable to parse config: %v", err)
-		return nil, err
+		log.Printf("Warning: invalid integer value for %s, using default: %d", key, defaultValue)
+		return defaultValue
 	}
-
-	return &cfg, nil
+	return value
 }
 
-func LoadConfig(filename string, fileType string) (*viper.Viper, error) {
-	v := viper.New()
-	v.SetConfigType(fileType)
-	v.SetConfigName(filename)
-	v.AddConfigPath(".")
-	v.AutomaticEnv()
-	err := v.ReadInConfig()
+func getEnvAsBool(key string, defaultValue bool) bool {
+	valueStr := os.Getenv(key)
+	if valueStr == "" {
+		return defaultValue
+	}
+	value, err := strconv.ParseBool(valueStr)
 	if err != nil {
-		log.Printf("Unable to read config: %v", err)
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			return nil, errors.New("config file not found")
-		}
-
-		return nil, err
+		log.Printf("Warning: invalid boolean value for %s, using default: %t", key, defaultValue)
+		return defaultValue
 	}
-
-	return v, nil
-}
-
-func getConfigPath(env string) string {
-	if env == "docker" {
-		return "/app/config/config-docker.yml"
-	} else if env == "production" {
-		return "/config/config-production.yml"
-	} else {
-		return "/config/config-development.yml"
-	}
-}
-
-func (cfg *SMSConfig) GetProviderConfig(providerName string) (*SMSProviderConfig, error) {
-	for _, provider := range cfg.Providers {
-		if provider.Provider == providerName {
-			return &provider, nil
-		}
-	}
-	return nil, errors.New("provider not found")
+	return value
 }

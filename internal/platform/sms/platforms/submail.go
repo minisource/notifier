@@ -101,7 +101,7 @@ func handleSubmailResult(result []byte) error {
 		}
 
 		if submailErrorResult.Msg != "" {
-			return fmt.Errorf(submailErrorResult.Msg)
+			return fmt.Errorf("submail SMS error: %s", submailErrorResult.Msg)
 		}
 	}
 
@@ -114,7 +114,7 @@ func handleSubmailResult(result []byte) error {
 	}
 
 	if len(errMsgs) > 0 {
-		return fmt.Errorf(strings.Join(errMsgs, "|"))
+		return fmt.Errorf("submail SMS errors: %s", strings.Join(errMsgs, "|"))
 	}
 
 	return nil
