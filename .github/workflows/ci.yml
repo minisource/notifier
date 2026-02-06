@@ -1,0 +1,15 @@
+﻿name: CI
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-and-push:
+    uses: minisource/.github/.github/workflows/build-and-push.yml@main
+    with:
+      image-name: minisource/notifier
+      default-branch: master
+    secrets: inherit
