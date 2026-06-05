@@ -53,6 +53,8 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 	if req.Metadata != nil {
 		metadataJSON, _ := json.Marshal(req.Metadata)
 		notification.Metadata = string(metadataJSON)
+	} else {
+		notification.Metadata = "{}"
 	}
 
 	if err := h.service.CreateNotification(c.Context(), notification); err != nil {
@@ -99,6 +101,8 @@ func (h *NotificationHandler) CreateBatchNotifications(c *fiber.Ctx) error {
 		if notifReq.Metadata != nil {
 			metadataJSON, _ := json.Marshal(notifReq.Metadata)
 			notification.Metadata = string(metadataJSON)
+		} else {
+			notification.Metadata = "{}"
 		}
 
 		notifications = append(notifications, notification)

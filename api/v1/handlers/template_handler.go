@@ -50,6 +50,8 @@ func (h *TemplateHandler) CreateTemplate(c *fiber.Ctx) error {
 	if req.Variables != nil {
 		variablesJSON, _ := json.Marshal(req.Variables)
 		template.Variables = string(variablesJSON)
+	} else {
+		template.Variables = "[]"
 	}
 
 	if err := h.repo.Create(c.Context(), template); err != nil {
@@ -150,6 +152,8 @@ func (h *TemplateHandler) UpdateTemplate(c *fiber.Ctx) error {
 	if req.Variables != nil {
 		variablesJSON, _ := json.Marshal(req.Variables)
 		template.Variables = string(variablesJSON)
+	} else if template.Variables == "" {
+		template.Variables = "[]"
 	}
 
 	if err := h.repo.Update(c.Context(), template); err != nil {

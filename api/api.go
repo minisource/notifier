@@ -1,10 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
-
-	"github.com/bytedance/sonic"
 	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
@@ -38,8 +37,8 @@ func InitServer(ctx *AppContext) {
 	// Initialize Fiber app
 	app := fiber.New(fiber.Config{
 		AppName:     ctx.Config.Server.Name,
-		JSONEncoder: sonic.Marshal,
-		JSONDecoder: sonic.Unmarshal,
+		JSONEncoder: json.Marshal,
+		JSONDecoder: json.Unmarshal,
 	})
 
 	// Middleware
@@ -64,9 +63,12 @@ func InitServer(ctx *AppContext) {
 		ContextKey:         "tenantId",
 		SkipPaths:          []string{"/health", "/ready", "/swagger", "/metrics", "/ws"},
 		TenantValidator: func(tenantID string) bool {
-			// Validate tenant exists and is active
+			// Dev slug used by ticket/feedback services via gateway
+			if tenantID == "default" {
+				return true
+			}
 			if ctx.DB == nil {
-				return true // Skip validation if DB not available
+				return true
 			}
 			var count int64
 			ctx.DB.Table("tenants").Where("id = ? AND is_active = ?", tenantID, true).Count(&count)
@@ -166,8 +168,8 @@ func RegisterRoutes(app *fiber.App, ctx *AppContext) {
 			preferences := v1.Group("/preferences", jwtMiddleware)
 			routers.Preferences(preferences, preferenceHandler)
 
-			// Protected template routes (require user JWT + admin role or templates:manage permission)
-			templates := v1.Group("/templates", jwtMiddleware, middleware.RequirePermissions("templates:read"))
+			// Protected template routes (super_admin/admin role or templates:read scope via service token)
+			templates := v1.Group("/templates", jwtMiddleware, middleware.RequireRoles("super_admin", "admin"))
 			routers.Templates(templates, templateHandler)
 
 		} else {

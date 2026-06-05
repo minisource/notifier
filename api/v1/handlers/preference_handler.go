@@ -80,6 +80,11 @@ func (h *PreferenceHandler) UpdatePreference(c *fiber.Ctx) error {
 	if req.CategorySettings != nil {
 		categoryJSON, _ := json.Marshal(req.CategorySettings)
 		pref.CategorySettings = string(categoryJSON)
+	} else {
+		pref.CategorySettings = "{}"
+	}
+	if pref.QuietHours == "" {
+		pref.QuietHours = "{}"
 	}
 
 	if err := h.repo.Upsert(c.Context(), pref); err != nil {

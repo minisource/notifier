@@ -3,11 +3,7 @@
 
 services:
   notifier:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - GO_VERSION=1.23
+    image: minisource/notifier:${TAG:-latest}
     container_name: ${COMPOSE_PROJECT_NAME:-notifier}-service
     env_file:
       - .env

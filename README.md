@@ -115,8 +115,16 @@ go run cmd/server/main.go
 #### Using Docker Compose
 
 ```sh
-docker-compose up -d
+# Production (pre-built image from Docker Hub)
+export TAG=latest
+docker compose -f docker-compose.prod.yml up -d
+
+# Development infrastructure
+docker compose -f docker-compose.dev.yml up -d
 ```
+
+Docker Hub image: `minisource/notifier` ([organization](https://hub.docker.com/orgs/minisource/repositories)).  
+GitHub secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`.
 
 This will start:
 - PostgreSQL database on port 5432
