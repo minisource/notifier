@@ -1,0 +1,57 @@
+{
+  "notifications": {
+    "notification_created": "Notification created successfully",
+    "notification_sent": "Notification sent",
+    "notification_failed": "Failed to send notification",
+    "notification_canceled": "Notification canceled",
+    "notification_scheduled": "Notification scheduled",
+    "notification_digest": "Daily digest",
+
+    "sms_sent": "SMS sent successfully",
+    "sms_failed": "Failed to send SMS",
+    "email_sent": "Email sent successfully",
+    "email_failed": "Failed to send email",
+    "push_sent": "Push notification sent",
+    "push_failed": "Failed to send push notification",
+    "inapp_new": "New notification",
+
+    "preference_updated": "Preferences updated",
+    "preference_channel_disabled": "Channel disabled",
+    "preference_quiet_hours": "In quiet hours",
+    "preference_digest_only": "Digest only",
+
+    "digest_subject": "You have %d new notifications",
+    "digest_empty": "No new notifications",
+    "digest_email_header": "Here is your notification summary",
+    "digest_sms_header": "Digest: %d notifications",
+    "digest_push_title": "%d new items",
+
+    "template_not_found": "Template not found",
+    "template_rendered": "Template rendered",
+    "template_rendered_preview": "Template preview rendered",
+
+    "errors": {
+      "invalid_request": "Invalid request",
+      "not_found": "Resource not found",
+      "internal_error": "Internal server error",
+      "unauthorized": "Unauthorized",
+      "forbidden": "Forbidden",
+      "validation_error": "Validation error",
+      "rate_limited": "Too many requests, please try again later",
+      "service_unavailable": "Service temporarily unavailable"
+    }
+  },
+
+  "preferences": {
+    "quiet_hours_start": "Quiet hours start",
+    "quiet_hours_end": "Quiet hours end",
+    "timezone": "Timezone",
+    "frequency_daily": "Daily",
+    "frequency_weekly": "Weekly",
+    "frequency_monthly": "Monthly",
+    "channel_email": "Email",
+    "channel_sms": "SMS",
+    "channel_push": "Push",
+    "channel_in_app": "In-App"
+  }
+}

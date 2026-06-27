@@ -1,0 +1,57 @@
+{
+  "notifications": {
+    "notification_created": "تم إنشاء الإشعار بنجاح",
+    "notification_sent": "تم إرسال الإشعار",
+    "notification_failed": "فشل إرسال الإشعار",
+    "notification_canceled": "تم إلغاء الإشعار",
+    "notification_scheduled": "تم جدولة الإشعار",
+    "notification_digest": "الملخص اليومي",
+
+    "sms_sent": "تم إرسال الرسالة النصية بنجاح",
+    "sms_failed": "فشل إرسال الرسالة النصية",
+    "email_sent": "تم إرسال البريد الإلكتروني بنجاح",
+    "email_failed": "فشل إرسال البريد الإلكتروني",
+    "push_sent": "تم إرسال الإشعار الفوري",
+    "push_failed": "فشل إرسال الإشعار الفوري",
+    "inapp_new": "إشعار جديد",
+
+    "preference_updated": "تم تحديث التفضيلات",
+    "preference_channel_disabled": "القناة معطلة",
+    "preference_quiet_hours": "في ساعات الهدوء",
+    "preference_digest_only": "الملخص فقط",
+
+    "digest_subject": "لديك %d إشعارات جديدة",
+    "digest_empty": "لا توجد إشعارات جديدة",
+    "digest_email_header": "إليك ملخص إشعاراتك",
+    "digest_sms_header": "الملخص: %d إشعار",
+    "digest_push_title": "%d عناصر جديدة",
+
+    "template_not_found": "القالب غير موجود",
+    "template_rendered": "تم معالجة القالب",
+    "template_rendered_preview": "تم معالجة معاينة القالب",
+
+    "errors": {
+      "invalid_request": "طلب غير صالح",
+      "not_found": "الموارد غير موجودة",
+      "internal_error": "خطأ داخلي في الخادم",
+      "unauthorized": "غير مصرح",
+      "forbidden": "ممنوع",
+      "validation_error": "خطأ في التحقق",
+      "rate_limited": "عدد الطلبات كبير جداً، يرجى المحاولة لاحقاً",
+      "service_unavailable": "الخدمة غير متاحة مؤقتاً"
+    }
+  },
+
+  "preferences": {
+    "quiet_hours_start": "بداية ساعات الهدوء",
+    "quiet_hours_end": "نهاية ساعات الهدوء",
+    "timezone": "المنطقة الزمنية",
+    "frequency_daily": "يومي",
+    "frequency_weekly": "أسبوعي",
+    "frequency_monthly": "شهري",
+    "channel_email": "البريد الإلكتروني",
+    "channel_sms": "رسالة نصية",
+    "channel_push": "إشعار فوري",
+    "channel_in_app": "داخل التطبيق"
+  }
+}

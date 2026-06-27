@@ -1,0 +1,4756 @@
+basePath: /v1
+definitions:
+  dto.ActionResponse:
+    properties:
+      id:
+        type: string
+      message:
+        type: string
+      status:
+        type: string
+    type: object
+  dto.AttemptResponse:
+    properties:
+      attemptNumber:
+        type: integer
+      completedAt:
+        type: string
+      createdAt:
+        type: string
+      deliveryId:
+        type: string
+      errorCode:
+        type: string
+      errorMessage:
+        type: string
+      id:
+        type: string
+      latencyMs:
+        type: integer
+      nextRetryAt:
+        type: string
+      providerMessageId:
+        type: string
+      providerResponseSanitized:
+        type: string
+      retryable:
+        type: boolean
+      status:
+        type: string
+    type: object
+  dto.BatchNotificationRequest:
+    properties:
+      notifications:
+        items:
+          $ref: '#/definitions/dto.CreateNotificationRequest'
+        maxItems: 100
+        minItems: 1
+        type: array
+    required:
+    - notifications
+    type: object
+  dto.ChannelPreferenceRequest:
+    properties:
+      allowDigest:
+        type: boolean
+      allowInstant:
+        type: boolean
+      digestFrequency:
+        type: string
+      isEnabled:
+        type: boolean
+      quietHours:
+        $ref: '#/definitions/models.QuietHoursConfig'
+    type: object
+  dto.CreateNotificationRequest:
+    properties:
+      body:
+        type: string
+      channel:
+        allOf:
+        - $ref: '#/definitions/models.NotificationChannel'
+        description: Channel is the primary notification channel (sms, email, push,
+          in_app, webhook)
+      idempotencyKey:
+        type: string
+      locale:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      priority:
+        allOf:
+        - $ref: '#/definitions/models.NotificationPriority'
+        description: Priority defaults to normal
+      providerId:
+        type: string
+      recipient:
+        allOf:
+        - $ref: '#/definitions/dto.NotificationRecipientRequest'
+        description: Recipient is the canonical nested recipient object
+      recipientEmail:
+        type: string
+      recipientId:
+        type: string
+      recipientPhone:
+        type: string
+      scheduledAt:
+        type: string
+      subject:
+        type: string
+      templateId:
+        type: string
+      templateKey:
+        type: string
+      type:
+        allOf:
+        - $ref: '#/definitions/models.NotificationType'
+        description: Type is a backward-compatible alias for channel
+      userId:
+        description: Legacy flat recipient fields (backward compat)
+        type: string
+    type: object
+  dto.CreateProviderRequest:
+    properties:
+      channel:
+        type: string
+      config:
+        additionalProperties: true
+        type: object
+      description:
+        type: string
+      isDefault:
+        type: boolean
+      name:
+        type: string
+      priority:
+        type: integer
+      secretConfig:
+        additionalProperties: true
+        type: object
+      status:
+        type: string
+      type:
+        type: string
+    required:
+    - channel
+    - name
+    type: object
+  dto.CreateReminderRequest:
+    properties:
+      body:
+        type: string
+      locale:
+        type: string
+      recipient:
+        type: string
+      scheduledAt:
+        type: string
+      subject:
+        type: string
+      templateId:
+        type: string
+      templateKey:
+        type: string
+      type:
+        $ref: '#/definitions/models.NotificationType'
+      userId:
+        type: string
+      variables:
+        additionalProperties:
+          type: string
+        type: object
+    required:
+    - recipient
+    - scheduledAt
+    - type
+    - userId
+    type: object
+  dto.CreateTemplateRequest:
+    properties:
+      body:
+        type: string
+      description:
+        type: string
+      isActive:
+        type: boolean
+      key:
+        type: string
+      locale:
+        type: string
+      name:
+        type: string
+      provider:
+        type: string
+      providerTemplate:
+        type: string
+      subject:
+        type: string
+      type:
+        $ref: '#/definitions/models.NotificationType'
+      variables:
+        items:
+          type: string
+        type: array
+    required:
+    - body
+    - name
+    - type
+    type: object
+  dto.DashboardOverviewResponse:
+    properties:
+      activeReminders:
+        type: integer
+      averageDeliveryMs:
+        type: number
+      cancelledCount:
+        type: integer
+      channelBreakdown:
+        additionalProperties:
+          format: int64
+          type: integer
+        type: object
+      dailyTrend: {}
+      deadLetterCount:
+        type: integer
+      deadToday:
+        type: integer
+      failedToday:
+        type: integer
+      failureRate:
+        type: number
+      generatedAt:
+        type: string
+      notificationsToday:
+        type: integer
+      processingCount:
+        type: integer
+      providerHealth:
+        items:
+          $ref: '#/definitions/dto.ProviderHealthItem'
+        type: array
+      queuedCount:
+        type: integer
+      recentDeadLetters:
+        items:
+          $ref: '#/definitions/dto.NotificationListItem'
+        type: array
+      recentFailures:
+        items:
+          $ref: '#/definitions/dto.NotificationListItem'
+        type: array
+      recentNotifications:
+        items:
+          $ref: '#/definitions/dto.NotificationListItem'
+        type: array
+      retryingCount:
+        type: integer
+      sentToday:
+        type: integer
+      statusBreakdown: {}
+      successRate:
+        type: number
+      totalNotifications:
+        type: integer
+    type: object
+  dto.DeliveryResponse:
+    properties:
+      attemptCount:
+        type: integer
+      attempts:
+        items:
+          $ref: '#/definitions/dto.AttemptResponse'
+        type: array
+      channel:
+        type: string
+      completedAt:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: string
+      lastErrorCode:
+        type: string
+      lastErrorMessage:
+        type: string
+      maxAttempts:
+        type: integer
+      nextRetryAt:
+        type: string
+      notificationId:
+        type: string
+      provider:
+        type: string
+      status:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  dto.DependencyHealth:
+    properties:
+      error:
+        type: string
+      name:
+        type: string
+      status:
+        type: string
+    type: object
+  dto.EnabledChannels:
+    properties:
+      email:
+        type: boolean
+      inApp:
+        type: boolean
+      push:
+        type: boolean
+      sms:
+        type: boolean
+      webhook:
+        type: boolean
+    type: object
+  dto.ErrorBody:
+    properties:
+      code:
+        type: string
+      details: {}
+      message:
+        type: string
+    type: object
+  dto.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/dto.ErrorBody'
+      requestId:
+        type: string
+    type: object
+  dto.MarkAllAsReadResponse:
+    properties:
+      message:
+        type: string
+      updatedCount:
+        type: integer
+      userId:
+        type: string
+    type: object
+  dto.NotificationListItem:
+    properties:
+      bodyPreview:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: string
+      locale:
+        type: string
+      priority:
+        $ref: '#/definitions/models.NotificationPriority'
+      recipientEmail:
+        type: string
+      recipientPhone:
+        type: string
+      retryCount:
+        type: integer
+      sentAt:
+        type: string
+      status:
+        $ref: '#/definitions/models.NotificationStatus'
+      subject:
+        type: string
+      templateKey:
+        type: string
+      tenantId:
+        type: string
+      type:
+        $ref: '#/definitions/models.NotificationType'
+      updatedAt:
+        type: string
+      userId:
+        type: string
+    type: object
+  dto.NotificationRecipientRequest:
+    properties:
+      deviceToken:
+        type: string
+      email:
+        type: string
+      phone:
+        type: string
+      userId:
+        type: string
+      webhookUrl:
+        type: string
+    type: object
+  dto.NotificationResponse:
+    properties:
+      body:
+        type: string
+      cancelledAt:
+        type: string
+      clickedAt:
+        type: string
+      createdAt:
+        type: string
+      deliveredAt:
+        type: string
+      errorMessage:
+        type: string
+      failedAt:
+        type: string
+      id:
+        type: string
+      locale:
+        type: string
+      maxRetries:
+        type: integer
+      priority:
+        $ref: '#/definitions/models.NotificationPriority'
+      provider:
+        type: string
+      readAt:
+        type: string
+      recipientEmail:
+        type: string
+      recipientPhone:
+        type: string
+      retryCount:
+        type: integer
+      scheduledAt:
+        type: string
+      seenAt:
+        type: string
+      sentAt:
+        type: string
+      status:
+        $ref: '#/definitions/models.NotificationStatus'
+      subject:
+        type: string
+      templateId:
+        type: string
+      templateKey:
+        type: string
+      tenantId:
+        type: string
+      type:
+        $ref: '#/definitions/models.NotificationType'
+      updatedAt:
+        type: string
+      userId:
+        type: string
+    type: object
+  dto.NotificationSettingsResponse:
+    properties:
+      defaultEmailProviderId:
+        description: Default providers per channel
+        type: string
+      defaultPushProviderId:
+        type: string
+      defaultSmsProviderId:
+        type: string
+      defaultWebhookProviderId:
+        type: string
+      enabledChannels:
+        allOf:
+        - $ref: '#/definitions/dto.EnabledChannels'
+        description: Enabled channels
+      quietHours:
+        allOf:
+        - $ref: '#/definitions/dto.QuietHoursConfig'
+        description: Quiet hours
+      rateLimit:
+        allOf:
+        - $ref: '#/definitions/dto.RateLimit'
+        description: Rate limits
+      retentionDays:
+        description: Retention
+        type: integer
+      retryPolicy:
+        allOf:
+        - $ref: '#/definitions/dto.RetryPolicy'
+        description: Retry policy
+    type: object
+  dto.ObservabilityHealthResponse:
+    properties:
+      dependencies:
+        items:
+          $ref: '#/definitions/dto.DependencyHealth'
+        type: array
+      environment:
+        type: string
+      generatedAt:
+        type: string
+      service:
+        type: string
+      status:
+        type: string
+      timestamp:
+        type: string
+      uptime:
+        type: string
+      uptimeSeconds:
+        type: integer
+      version:
+        type: string
+    type: object
+  dto.ObservabilityMetricsResponse:
+    properties:
+      activeWorkers:
+        type: integer
+      averageDeliveryTimeMs:
+        type: number
+      failedAttempts:
+        type: integer
+      generatedAt:
+        type: string
+      notificationsDead:
+        type: integer
+      notificationsFailed:
+        type: integer
+      notificationsPending:
+        type: integer
+      notificationsSent:
+        type: integer
+      queueDepth:
+        type: integer
+      successRate:
+        type: number
+      totalAttempts:
+        type: integer
+    type: object
+  dto.ObservabilityReadinessResponse:
+    properties:
+      checks:
+        items:
+          $ref: '#/definitions/dto.ReadinessCheck'
+        type: array
+      generatedAt:
+        type: string
+      overall:
+        type: string
+      ready:
+        type: boolean
+      status:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  dto.PaginatedNotificationResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.NotificationResponse'
+        type: array
+      page:
+        type: integer
+      pageSize:
+        type: integer
+      total:
+        type: integer
+      totalPages:
+        type: integer
+    type: object
+  dto.PaginatedResponse:
+    properties:
+      items: {}
+      page:
+        type: integer
+      pageSize:
+        type: integer
+      total:
+        type: integer
+      totalPages:
+        type: integer
+    type: object
+  dto.PreferenceResponse:
+    properties:
+      allowDigest:
+        type: boolean
+      allowInstant:
+        type: boolean
+      categorySettings:
+        additionalProperties:
+          type: boolean
+        type: object
+      digestFrequency:
+        type: string
+      id:
+        type: string
+      isEnabled:
+        type: boolean
+      quietHours:
+        $ref: '#/definitions/models.QuietHoursConfig'
+      type:
+        $ref: '#/definitions/models.NotificationType'
+      userId:
+        type: string
+    type: object
+  dto.ProviderHealthItem:
+    properties:
+      channel:
+        type: string
+      name:
+        type: string
+      status:
+        type: string
+      successRate:
+        type: number
+    type: object
+  dto.ProviderHealthResponse:
+    properties:
+      checkedAt:
+        type: string
+      degradedCount:
+        type: integer
+      disabledCount:
+        type: integer
+      downCount:
+        type: integer
+      healthyCount:
+        type: integer
+      providers:
+        items:
+          $ref: '#/definitions/dto.ProviderHealthItem'
+        type: array
+    type: object
+  dto.ProviderResponse:
+    properties:
+      averageLatencyMs:
+        type: integer
+      channel:
+        type: string
+      config:
+        additionalProperties: true
+        type: object
+      createdAt:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      isDefault:
+        type: boolean
+      isEnabled:
+        type: boolean
+      isPrimary:
+        type: boolean
+      lastError:
+        type: string
+      lastFailureAt:
+        type: string
+      lastSuccessAt:
+        type: string
+      name:
+        type: string
+      priority:
+        type: integer
+      status:
+        type: string
+      successRate:
+        type: number
+      type:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  dto.ProviderTestRequest:
+    properties:
+      body:
+        type: string
+      channel:
+        type: string
+      dryRun:
+        type: boolean
+      recipient:
+        type: string
+      subject:
+        type: string
+    type: object
+  dto.ProviderTestResponse:
+    properties:
+      channel:
+        type: string
+      checkedAt:
+        type: string
+      dryRun:
+        type: boolean
+      latencyMs:
+        type: integer
+      message:
+        type: string
+      providerId:
+        type: string
+      providerMessageId:
+        type: string
+      providerResponseSanitized:
+        type: string
+      status:
+        type: string
+      success:
+        type: boolean
+    type: object
+  dto.QueueOverviewResponse:
+    properties:
+      averageLatencyMs:
+        type: number
+      deadCount:
+        type: integer
+      generatedAt:
+        type: string
+      nextRetryAt:
+        type: string
+      oldestPendingAt:
+        type: string
+      pendingCount:
+        type: integer
+      processingCount:
+        type: integer
+      retryingCount:
+        type: integer
+      scheduledCount:
+        type: integer
+      throughputPerMinute:
+        type: number
+    type: object
+  dto.QuietHoursConfig:
+    properties:
+      enabled:
+        type: boolean
+      end:
+        description: HH:mm
+        type: string
+      start:
+        description: HH:mm
+        type: string
+      timezone:
+        type: string
+    type: object
+  dto.RateLimit:
+    properties:
+      enabled:
+        type: boolean
+      perHour:
+        type: integer
+      perMinute:
+        type: integer
+    type: object
+  dto.ReadinessCheck:
+    properties:
+      error:
+        type: string
+      name:
+        type: string
+      status:
+        type: string
+    type: object
+  dto.ReminderResponse:
+    properties:
+      body:
+        type: string
+      cancelledAt:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: string
+      locale:
+        type: string
+      notificationId:
+        type: string
+      recipient:
+        type: string
+      scheduledAt:
+        type: string
+      status:
+        type: string
+      subject:
+        type: string
+      templateId:
+        type: string
+      templateKey:
+        type: string
+      type:
+        $ref: '#/definitions/models.NotificationType'
+      updatedAt:
+        type: string
+      userId:
+        type: string
+      variables:
+        additionalProperties:
+          type: string
+        type: object
+    type: object
+  dto.RenderPreviewRequest:
+    properties:
+      locale:
+        type: string
+      templateId:
+        description: For ID-based render (alternative)
+        type: string
+      templateKey:
+        description: For key-based render
+        type: string
+      variables:
+        additionalProperties:
+          type: string
+        type: object
+    type: object
+  dto.RenderPreviewResponse:
+    properties:
+      body:
+        type: string
+      missingVariables:
+        items:
+          type: string
+        type: array
+      subject:
+        type: string
+      usedVariables:
+        items:
+          type: string
+        type: array
+    type: object
+  dto.RetryPolicy:
+    properties:
+      backoffStrategy:
+        description: fixed, linear, exponential
+        type: string
+      enabled:
+        type: boolean
+      initialDelaySeconds:
+        type: integer
+      maxAttempts:
+        type: integer
+      maxDelaySeconds:
+        type: integer
+    type: object
+  dto.SetDefaultProviderRequest:
+    properties:
+      isDefault:
+        type: boolean
+    type: object
+  dto.TemplateResponse:
+    properties:
+      body:
+        type: string
+      createdAt:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      isActive:
+        type: boolean
+      key:
+        type: string
+      locale:
+        type: string
+      name:
+        type: string
+      subject:
+        type: string
+      type:
+        $ref: '#/definitions/models.NotificationType'
+    type: object
+  dto.ToggleProviderStatusRequest:
+    properties:
+      isEnabled:
+        type: boolean
+      status:
+        type: string
+    type: object
+  dto.UnreadCountResponse:
+    properties:
+      unreadCount:
+        type: integer
+      userId:
+        type: string
+    type: object
+  dto.UpdateNotificationSettingsRequest:
+    properties:
+      defaultEmailProviderId:
+        type: string
+      defaultPushProviderId:
+        type: string
+      defaultSmsProviderId:
+        type: string
+      defaultWebhookProviderId:
+        type: string
+      enabledChannels:
+        $ref: '#/definitions/dto.EnabledChannels'
+      quietHours:
+        $ref: '#/definitions/dto.QuietHoursConfig'
+      rateLimit:
+        $ref: '#/definitions/dto.RateLimit'
+      retentionDays:
+        type: integer
+      retryPolicy:
+        $ref: '#/definitions/dto.RetryPolicy'
+    type: object
+  dto.UpdatePreferenceRequest:
+    properties:
+      allowDigest:
+        type: boolean
+      allowInstant:
+        type: boolean
+      categorySettings:
+        additionalProperties:
+          type: boolean
+        type: object
+      digestFrequency:
+        type: string
+      isEnabled:
+        type: boolean
+      quietHours:
+        $ref: '#/definitions/models.QuietHoursConfig'
+      type:
+        $ref: '#/definitions/models.NotificationType'
+    required:
+    - type
+    type: object
+  dto.UpdateProviderRequest:
+    properties:
+      channel:
+        type: string
+      config:
+        additionalProperties: true
+        type: object
+      description:
+        type: string
+      isDefault:
+        type: boolean
+      isEnabled:
+        type: boolean
+      name:
+        type: string
+      priority:
+        type: integer
+      secretConfig:
+        additionalProperties: true
+        type: object
+      status:
+        type: string
+      type:
+        type: string
+    type: object
+  dto.WorkerInfo:
+    properties:
+      channel:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      queueSize:
+        type: integer
+      status:
+        type: string
+    type: object
+  dto.WorkerOverviewResponse:
+    properties:
+      activeCount:
+        type: integer
+      failedCount:
+        type: integer
+      generatedAt:
+        type: string
+      idleCount:
+        type: integer
+      lastHeartbeatAt:
+        type: string
+      workers:
+        items:
+          $ref: '#/definitions/dto.WorkerInfo'
+        type: array
+    type: object
+  models.NotificationChannel:
+    enum:
+    - sms
+    - email
+    - push
+    - in_app
+    - webhook
+    - security
+    type: string
+    x-enum-varnames:
+    - NotificationTypeSMS
+    - NotificationTypeEmail
+    - NotificationTypePush
+    - NotificationTypeInApp
+    - NotificationTypeWebhook
+    - NotificationTypeSecurity
+  models.NotificationPriority:
+    enum:
+    - low
+    - normal
+    - high
+    - urgent
+    type: string
+    x-enum-varnames:
+    - NotificationPriorityLow
+    - NotificationPriorityNormal
+    - NotificationPriorityHigh
+    - NotificationPriorityUrgent
+  models.NotificationStatus:
+    enum:
+    - pending
+    - queued
+    - sending
+    - processing
+    - sent
+    - delivered
+    - failed
+    - retrying
+    - dead
+    - canceled
+    - cancelled
+    - digested
+    type: string
+    x-enum-varnames:
+    - NotificationStatusPending
+    - NotificationStatusQueued
+    - NotificationStatusSending
+    - NotificationStatusProcessing
+    - NotificationStatusSent
+    - NotificationStatusDelivered
+    - NotificationStatusFailed
+    - NotificationStatusRetrying
+    - NotificationStatusDead
+    - NotificationStatusCanceled
+    - NotificationStatusCancelled
+    - NotificationStatusDigested
+  models.NotificationType:
+    enum:
+    - sms
+    - email
+    - push
+    - in_app
+    - webhook
+    - security
+    type: string
+    x-enum-varnames:
+    - NotificationTypeSMS
+    - NotificationTypeEmail
+    - NotificationTypePush
+    - NotificationTypeInApp
+    - NotificationTypeWebhook
+    - NotificationTypeSecurity
+  models.QuietHoursConfig:
+    properties:
+      end:
+        type: string
+      start:
+        type: string
+      timezone:
+        type: string
+    type: object
+host: 127.0.0.1:9002
+info:
+  contact:
+    email: support@minisource.com
+    name: API Support
+  description: Notification Service for Minisource - Handles Email, SMS, Push, and
+    In-App notifications
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Notifier Service API
+  version: "2.0"
+paths:
+  /admin/dashboard/overview:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve the dashboard overview with key metrics — aggregated counts,
+        channel/status breakdown, daily trend, recent failures. Admin/operator only.
+        Data derived from notifications table.
+      parameters:
+      - description: 'Start date (RFC3339), default: 7 days ago'
+        in: query
+        name: from
+        type: string
+      - description: 'End date (RFC3339), default: now'
+        in: query
+        name: to
+        type: string
+      - description: Filter by tenant ID
+        in: query
+        name: tenantId
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.DashboardOverviewResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Get dashboard overview'
+      tags:
+      - Admin Dashboard
+  /admin/notifications:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of all notifications with full filters
+        (admin only)
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by type
+        in: query
+        name: type
+        type: string
+      - description: Filter by channel
+        in: query
+        name: channel
+        type: string
+      - description: Filter by user ID
+        in: query
+        name: userId
+        type: string
+      - description: Filter by tenant ID
+        in: query
+        name: tenantId
+        type: string
+      - description: Search in recipient/subject/body
+        in: query
+        name: search
+        type: string
+      - description: Start date (ISO8601)
+        in: query
+        name: from
+        type: string
+      - description: End date (ISO8601)
+        in: query
+        name: to
+        type: string
+      - default: createdAt
+        description: Sort field
+        in: query
+        name: sortBy
+        type: string
+      - default: desc
+        description: Sort direction
+        in: query
+        name: sortDirection
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedNotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: List all notifications'
+      tags:
+      - Admin Notifications
+    post:
+      consumes:
+      - application/json
+      description: 'Create a new notification (admin only).\nCanonical format: {\"channel\":\"sms\",\"recipient\":{\"phone\":\"+989...\"},\"body\":\"...\"}'
+      parameters:
+      - description: Notification data
+        in: body
+        name: notification
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateNotificationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.NotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Create notification'
+      tags:
+      - Admin Notifications
+  /admin/notifications/{notificationId}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a single notification with full details (admin only)
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.NotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Get notification by ID'
+      tags:
+      - Admin Notifications
+  /admin/notifications/{notificationId}/attempts:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve individual delivery attempts for a notification (admin
+        only)
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.AttemptResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Get notification delivery attempts'
+      tags:
+      - Admin Notifications
+  /admin/notifications/{notificationId}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel a pending/queued/retrying notification (admin only)
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Cancel notification'
+      tags:
+      - Admin Notifications
+  /admin/notifications/{notificationId}/click:
+    post:
+      consumes:
+      - application/json
+      description: Mark a notification as clicked (admin only)
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Mark notification as clicked'
+      tags:
+      - Admin Notifications
+  /admin/notifications/{notificationId}/deliveries:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve delivery attempts for a notification (admin only)
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.DeliveryResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Get notification deliveries'
+      tags:
+      - Admin Notifications
+  /admin/notifications/{notificationId}/read:
+    put:
+      consumes:
+      - application/json
+      description: Mark a notification as read (admin only)
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Mark notification as read'
+      tags:
+      - Admin Notifications
+  /admin/notifications/{notificationId}/retry:
+    post:
+      consumes:
+      - application/json
+      description: Retry a failed/dead notification (admin only)
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Retry notification'
+      tags:
+      - Admin Notifications
+  /admin/notifications/{notificationId}/seen:
+    post:
+      consumes:
+      - application/json
+      description: Mark a notification as seen (admin only)
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Mark notification as seen'
+      tags:
+      - Admin Notifications
+  /admin/notifications/read-all:
+    post:
+      consumes:
+      - application/json
+      description: Mark all unread notifications as read for a user (admin only)
+      parameters:
+      - description: User ID
+        in: query
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MarkAllAsReadResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Mark all notifications as read'
+      tags:
+      - Admin Notifications
+  /admin/observability/health:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve detailed health status of the service and its dependencies.
+        Admin/operator only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ObservabilityHealthResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get service health (admin)
+      tags:
+      - Admin Observability
+  /admin/observability/metrics:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve service operational metrics — queue depth, counts by status,
+        success rate, delivery latency. Admin/operator only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ObservabilityMetricsResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get operational metrics (admin)
+      tags:
+      - Admin Observability
+  /admin/observability/queue:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve queue metrics — counts by status (pending, processing,
+        retrying, dead, scheduled). Admin/operator only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.QueueOverviewResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get queue overview (admin)
+      tags:
+      - Admin Observability
+  /admin/observability/readiness:
+    get:
+      consumes:
+      - application/json
+      description: Check if the service is ready to accept traffic. Verifies key dependencies.
+        Admin/operator only.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ObservabilityReadinessResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get service readiness (admin)
+      tags:
+      - Admin Observability
+  /admin/observability/workers:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve worker status information. Worker heartbeat tracking is
+        not fully implemented — returns configured worker pool info.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.WorkerOverviewResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get workers overview (admin)
+      tags:
+      - Admin Observability
+  /admin/preferences/user/{userId}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve notification preferences for any user (admin only)
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.PreferenceResponse'
+            type: array
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Get user preferences'
+      tags:
+      - Admin Preferences
+    put:
+      consumes:
+      - application/json
+      description: Update notification preferences for any user (admin only)
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - description: Preference data
+        in: body
+        name: preference
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdatePreferenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PreferenceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Update user preferences'
+      tags:
+      - Admin Preferences
+  /admin/preferences/user/{userId}/category/{category}:
+    patch:
+      consumes:
+      - application/json
+      description: Update notification category settings for any user (admin only)
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - description: Category
+        in: path
+        name: category
+        required: true
+        type: string
+      - description: Category preference settings
+        in: body
+        name: preference
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChannelPreferenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PreferenceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Update user category preference'
+      tags:
+      - Admin Preferences
+  /admin/preferences/user/{userId}/channel/{channel}:
+    patch:
+      consumes:
+      - application/json
+      description: Update a specific channel preference for any user (admin only)
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - description: Channel
+        in: path
+        name: channel
+        required: true
+        type: string
+      - description: Channel preference settings
+        in: body
+        name: preference
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChannelPreferenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PreferenceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Update user channel preference'
+      tags:
+      - Admin Preferences
+  /admin/providers:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all configured notification providers from providers table
+      parameters:
+      - description: Filter by channel (sms, email, push, webhook, in_app)
+        in: query
+        name: channel
+        type: string
+      - description: Filter by status (active, inactive, disabled, error)
+        in: query
+        name: status
+        type: string
+      - description: Filter by provider type (e.g., kavenegar, smtp)
+        in: query
+        name: providerType
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.ProviderResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List providers
+      tags:
+      - Providers
+    post:
+      consumes:
+      - application/json
+      description: Create a new notification provider
+      parameters:
+      - description: Provider data
+        in: body
+        name: provider
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateProviderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.ProviderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create provider
+      tags:
+      - Providers
+  /admin/providers/{providerId}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete (soft-delete) a provider
+      parameters:
+      - description: Provider ID
+        in: path
+        name: providerId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete provider
+      tags:
+      - Providers
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a single provider by ID
+      parameters:
+      - description: Provider ID
+        in: path
+        name: providerId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ProviderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get provider by ID
+      tags:
+      - Providers
+    put:
+      consumes:
+      - application/json
+      description: Update an existing provider
+      parameters:
+      - description: Provider ID
+        in: path
+        name: providerId
+        required: true
+        type: string
+      - description: Provider data
+        in: body
+        name: provider
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateProviderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ProviderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update provider
+      tags:
+      - Providers
+  /admin/providers/{providerId}/default:
+    patch:
+      consumes:
+      - application/json
+      description: Set or unset a provider as default for its channel
+      parameters:
+      - description: Provider ID
+        in: path
+        name: providerId
+        required: true
+        type: string
+      - description: Default status
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SetDefaultProviderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ProviderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Set provider as default
+      tags:
+      - Providers
+  /admin/providers/{providerId}/status:
+    patch:
+      consumes:
+      - application/json
+      description: Enable or disable a provider, or update status field
+      parameters:
+      - description: Provider ID
+        in: path
+        name: providerId
+        required: true
+        type: string
+      - description: Status update
+        in: body
+        name: status
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ToggleProviderStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ProviderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Toggle provider status
+      tags:
+      - Providers
+  /admin/providers/{providerId}/test:
+    post:
+      consumes:
+      - application/json
+      description: Test a specific provider connection (dry-run by default)
+      parameters:
+      - description: Provider ID
+        in: path
+        name: providerId
+        required: true
+        type: string
+      - description: Test payload (optional, uses defaults if empty)
+        in: body
+        name: test
+        schema:
+          $ref: '#/definitions/dto.ProviderTestRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ProviderTestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Test provider
+      tags:
+      - Providers
+  /admin/providers/health:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve health status of all providers based on status/config
+        validity
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ProviderHealthResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get provider health
+      tags:
+      - Providers
+  /admin/reminders:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of all reminders with filters (admin only)
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by user ID
+        in: query
+        name: userId
+        type: string
+      - description: Start date range (ISO8601)
+        in: query
+        name: scheduledFrom
+        type: string
+      - description: End date range (ISO8601)
+        in: query
+        name: scheduledTo
+        type: string
+      - description: Search in subject/templateKey
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: List all reminders'
+      tags:
+      - Admin Reminders
+    post:
+      consumes:
+      - application/json
+      description: Create a scheduled reminder for any user (admin only)
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-Id
+        type: string
+      - description: Reminder data
+        in: body
+        name: reminder
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateReminderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.ReminderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Create reminder'
+      tags:
+      - Admin Reminders
+  /admin/reminders/{reminderId}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a scheduled/cancelled reminder (admin only)
+      parameters:
+      - description: Reminder ID
+        in: path
+        name: reminderId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Delete reminder'
+      tags:
+      - Admin Reminders
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a specific reminder (admin only)
+      parameters:
+      - description: Reminder ID
+        in: path
+        name: reminderId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReminderResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Get reminder by ID'
+      tags:
+      - Admin Reminders
+    put:
+      consumes:
+      - application/json
+      description: Update a scheduled reminder for any user (admin only)
+      parameters:
+      - description: Reminder ID
+        in: path
+        name: reminderId
+        required: true
+        type: string
+      - description: Reminder data
+        in: body
+        name: reminder
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateReminderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReminderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Update reminder'
+      tags:
+      - Admin Reminders
+  /admin/reminders/{reminderId}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel a scheduled/processing reminder for any user (admin only)
+      parameters:
+      - description: Reminder ID
+        in: path
+        name: reminderId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReminderResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Cancel reminder'
+      tags:
+      - Admin Reminders
+  /admin/reminders/user/{userId}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve reminders for a specific user (admin only)
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Get user reminders'
+      tags:
+      - Admin Reminders
+  /admin/settings/notifications:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve the full notification settings configuration (admin only)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.NotificationSettingsResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Get notification settings'
+      tags:
+      - Admin Settings
+    patch:
+      consumes:
+      - application/json
+      description: Update the notification settings configuration (admin only)
+      parameters:
+      - description: Settings to update
+        in: body
+        name: settings
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateNotificationSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.NotificationSettingsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Update notification settings'
+      tags:
+      - Admin Settings
+  /admin/templates:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of templates (admin only)
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by channel
+        in: query
+        name: channel
+        type: string
+      - description: Filter by locale
+        in: query
+        name: locale
+        type: string
+      - description: Search in name/key/subject
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: List all templates'
+      tags:
+      - Admin Templates
+    post:
+      consumes:
+      - application/json
+      description: Create a new notification template (admin only)
+      parameters:
+      - description: Template data
+        in: body
+        name: template
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.TemplateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Create template'
+      tags:
+      - Admin Templates
+  /admin/templates/{templateId}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a template (admin only)
+      parameters:
+      - description: Template ID
+        in: path
+        name: templateId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Delete template'
+      tags:
+      - Admin Templates
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a template by ID (admin only)
+      parameters:
+      - description: Template ID
+        in: path
+        name: templateId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TemplateResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Get template by ID'
+      tags:
+      - Admin Templates
+    put:
+      consumes:
+      - application/json
+      description: Update an existing template (admin only)
+      parameters:
+      - description: Template ID
+        in: path
+        name: templateId
+        required: true
+        type: string
+      - description: Template data
+        in: body
+        name: template
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TemplateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Update template'
+      tags:
+      - Admin Templates
+  /admin/templates/{templateId}/render-preview:
+    post:
+      consumes:
+      - application/json
+      description: Render a template preview using template ID (admin only)
+      parameters:
+      - description: Template ID
+        in: path
+        name: templateId
+        required: true
+        type: string
+      - description: Render preview request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RenderPreviewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.RenderPreviewResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Render preview by ID'
+      tags:
+      - Admin Templates
+  /admin/templates/{templateId}/status:
+    patch:
+      consumes:
+      - application/json
+      description: Activate or deactivate a template (admin only)
+      parameters:
+      - description: Template ID
+        in: path
+        name: templateId
+        required: true
+        type: string
+      - description: 'Status update {isActive: bool}'
+        in: body
+        name: status
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TemplateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Update template status'
+      tags:
+      - Admin Templates
+  /admin/templates/key/{key}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a template by its unique key (admin only)
+      parameters:
+      - description: Template key
+        in: path
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TemplateResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Get template by key'
+      tags:
+      - Admin Templates
+  /admin/templates/render-preview:
+    post:
+      consumes:
+      - application/json
+      description: Render a template preview using template key (admin only)
+      parameters:
+      - description: Render preview request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RenderPreviewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.RenderPreviewResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Admin: Render preview by key'
+      tags:
+      - Admin Templates
+  /deliveries:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of deliveries (notifications) with optional
+        filters. Filters are applied on the notification entity which serves as the
+        delivery unit.
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by delivery status (pending, processing, sent, delivered,
+          failed, retrying, dead, cancelled)
+        in: query
+        name: status
+        type: string
+      - description: Filter by channel (sms, email, push, in_app)
+        in: query
+        name: channel
+        type: string
+      - description: Filter by provider name
+        in: query
+        name: provider
+        type: string
+      - description: Filter by notification ID
+        in: query
+        name: notificationId
+        type: string
+      - description: Filter by user ID
+        in: query
+        name: userId
+        type: string
+      - description: Start date (RFC3339)
+        in: query
+        name: from
+        type: string
+      - description: End date (RFC3339)
+        in: query
+        name: to
+        type: string
+      - description: Search in subject/body/recipient
+        in: query
+        name: search
+        type: string
+      - default: created_at
+        description: Sort field (created_at, updated_at, sent_at, priority, status)
+        in: query
+        name: sortBy
+        type: string
+      - default: desc
+        description: Sort direction (asc, desc)
+        in: query
+        name: sortDirection
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List deliveries
+      tags:
+      - Deliveries
+  /deliveries/{deliveryId}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a specific delivery (notification) with its attempt history.
+        Delivery ID is the same as the notification ID. Includes logs/attempts in
+        the response.
+      parameters:
+      - description: Delivery ID (notification UUID)
+        in: path
+        name: deliveryId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.DeliveryResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get delivery by ID
+      tags:
+      - Deliveries
+  /deliveries/{deliveryId}/retry:
+    post:
+      consumes:
+      - application/json
+      description: 'Retry a failed/dead delivery (notification). Valid statuses for
+        retry: failed, dead. Returns 409 Conflict if current state does not allow
+        retry.'
+      parameters:
+      - description: Delivery ID (notification UUID)
+        in: path
+        name: deliveryId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retry delivery
+      tags:
+      - Deliveries
+  /health/:
+    get:
+      consumes:
+      - application/json
+      description: Health Check
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Failed
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Health Check
+      tags:
+      - health
+  /me/notifications:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated notifications for the authenticated user
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by channel
+        in: query
+        name: channel
+        type: string
+      - description: Start date (ISO8601)
+        in: query
+        name: from
+        type: string
+      - description: End date (ISO8601)
+        in: query
+        name: to
+        type: string
+      - description: Search in subject/body
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedNotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List my notifications
+      tags:
+      - User Notifications
+  /me/notifications/{notificationId}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a single notification owned by the authenticated user
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.NotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get my notification by ID
+      tags:
+      - User Notifications
+  /me/notifications/{notificationId}/click:
+    post:
+      consumes:
+      - application/json
+      description: Mark a notification owned by the authenticated user as clicked
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark my notification as clicked
+      tags:
+      - User Notifications
+  /me/notifications/{notificationId}/read:
+    put:
+      consumes:
+      - application/json
+      description: Mark a notification owned by the authenticated user as read
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark my notification as read
+      tags:
+      - User Notifications
+  /me/notifications/{notificationId}/seen:
+    post:
+      consumes:
+      - application/json
+      description: Mark a notification owned by the authenticated user as seen
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark my notification as seen
+      tags:
+      - User Notifications
+  /me/notifications/read-all:
+    post:
+      consumes:
+      - application/json
+      description: Mark all unread notifications as read for the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MarkAllAsReadResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark all my notifications as read
+      tags:
+      - User Notifications
+  /me/notifications/unread:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve unread notifications for the authenticated user
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedNotificationResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get my unread notifications
+      tags:
+      - User Notifications
+  /me/notifications/unread-count:
+    get:
+      consumes:
+      - application/json
+      description: Get the count of unread notifications for the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.UnreadCountResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get my unread notification count
+      tags:
+      - User Notifications
+  /me/preferences:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve notification preferences for the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.PreferenceResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get my notification preferences
+      tags:
+      - User Preferences
+    put:
+      consumes:
+      - application/json
+      description: Update notification preferences for the authenticated user
+      parameters:
+      - description: Preference data
+        in: body
+        name: preference
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdatePreferenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PreferenceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update my notification preferences
+      tags:
+      - User Preferences
+  /me/preferences/category/{category}:
+    patch:
+      consumes:
+      - application/json
+      description: Update notification category settings for the authenticated user
+      parameters:
+      - description: Category (system, alerts, updates, marketing, security)
+        in: path
+        name: category
+        required: true
+        type: string
+      - description: Category preference settings
+        in: body
+        name: preference
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChannelPreferenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PreferenceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update my category preference
+      tags:
+      - User Preferences
+  /me/preferences/channel/{channel}:
+    patch:
+      consumes:
+      - application/json
+      description: Update a specific channel preference for the authenticated user
+      parameters:
+      - description: Channel (email, sms, push, in_app)
+        in: path
+        name: channel
+        required: true
+        type: string
+      - description: Channel preference settings
+        in: body
+        name: preference
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChannelPreferenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PreferenceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update my channel preference
+      tags:
+      - User Preferences
+  /me/reminders:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated reminders for the authenticated user
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Start date range (ISO8601)
+        in: query
+        name: scheduledFrom
+        type: string
+      - description: End date range (ISO8601)
+        in: query
+        name: scheduledTo
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List my reminders
+      tags:
+      - User Reminders
+    post:
+      consumes:
+      - application/json
+      description: Create a new scheduled reminder for the authenticated user
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-Id
+        type: string
+      - description: Reminder data (userId is ignored, taken from JWT)
+        in: body
+        name: reminder
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateReminderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.ReminderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a reminder for myself
+      tags:
+      - User Reminders
+  /me/reminders/{reminderId}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a scheduled or cancelled reminder owned by the authenticated
+        user
+      parameters:
+      - description: Reminder ID
+        in: path
+        name: reminderId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete my reminder
+      tags:
+      - User Reminders
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a reminder owned by the authenticated user
+      parameters:
+      - description: Reminder ID
+        in: path
+        name: reminderId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReminderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get my reminder by ID
+      tags:
+      - User Reminders
+    put:
+      consumes:
+      - application/json
+      description: Update a scheduled reminder owned by the authenticated user
+      parameters:
+      - description: Reminder ID
+        in: path
+        name: reminderId
+        required: true
+        type: string
+      - description: Reminder data
+        in: body
+        name: reminder
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateReminderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReminderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update my reminder
+      tags:
+      - User Reminders
+  /me/reminders/{reminderId}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel a scheduled reminder owned by the authenticated user
+      parameters:
+      - description: Reminder ID
+        in: path
+        name: reminderId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReminderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Cancel my reminder
+      tags:
+      - User Reminders
+  /notifications:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of all notifications with filters
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by type/channel
+        in: query
+        name: type
+        type: string
+      - description: Filter by channel (alias for type)
+        in: query
+        name: channel
+        type: string
+      - description: Filter by user ID
+        in: query
+        name: userId
+        type: string
+      - description: Search in recipient/subject/body
+        in: query
+        name: search
+        type: string
+      - description: Start date (ISO8601)
+        in: query
+        name: from
+        type: string
+      - description: End date (ISO8601)
+        in: query
+        name: to
+        type: string
+      - default: createdAt
+        description: Sort field (createdAt, updatedAt, sentAt, priority, status)
+        in: query
+        name: sortBy
+        type: string
+      - default: desc
+        description: Sort direction (asc, desc)
+        in: query
+        name: sortDirection
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedNotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List all notifications (admin)
+      tags:
+      - Notifications
+    post:
+      consumes:
+      - application/json
+      description: Create a new notification. Supports Idempotency-Key header or body
+        idempotencyKey field to prevent duplicates.
+      parameters:
+      - description: Idempotency key to prevent duplicate sends
+        in: header
+        name: Idempotency-Key
+        type: string
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-Id
+        type: string
+      - description: Request ID
+        in: header
+        name: X-Request-Id
+        type: string
+      - description: Notification data
+        in: body
+        name: notification
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateNotificationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.NotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create notification
+      tags:
+      - Notifications
+  /notifications/{notificationId}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a single notification by its ID with full operational
+        details
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-Id
+        type: string
+      - description: Request ID
+        in: header
+        name: X-Request-Id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.NotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get notification by ID
+      tags:
+      - Notifications
+  /notifications/{notificationId}/attempts:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve individual delivery attempts for a notification
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.AttemptResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get notification delivery attempts
+      tags:
+      - Notifications
+  /notifications/{notificationId}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel a pending, queued, or retrying notification
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Cancel notification
+      tags:
+      - Notifications
+  /notifications/{notificationId}/click:
+    post:
+      consumes:
+      - application/json
+      description: Mark a notification as clicked (user interacted)
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark notification as clicked
+      tags:
+      - Notifications
+  /notifications/{notificationId}/deliveries:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve delivery attempts for a notification (mapped from notification
+        logs)
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.DeliveryResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get notification deliveries
+      tags:
+      - Notifications
+  /notifications/{notificationId}/read:
+    put:
+      consumes:
+      - application/json
+      description: Mark a notification as read
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-Id
+        type: string
+      - description: Request ID
+        in: header
+        name: X-Request-Id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark notification as read
+      tags:
+      - Notifications
+  /notifications/{notificationId}/retry:
+    post:
+      consumes:
+      - application/json
+      description: Retry a failed or dead-letter notification
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retry notification
+      tags:
+      - Notifications
+  /notifications/{notificationId}/seen:
+    post:
+      consumes:
+      - application/json
+      description: Mark a notification as seen (displayed to user)
+      parameters:
+      - description: Notification ID
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark notification as seen
+      tags:
+      - Notifications
+  /notifications/batch:
+    post:
+      consumes:
+      - application/json
+      description: Create multiple notifications at once
+      parameters:
+      - description: Batch notification data
+        in: body
+        name: batch
+        required: true
+        schema:
+          $ref: '#/definitions/dto.BatchNotificationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create batch notifications
+      tags:
+      - Notifications
+  /notifications/user/{userId}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated notifications for a user
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedNotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Get user notifications
+      tags:
+      - Notifications
+  /notifications/user/{userId}/read-all:
+    post:
+      consumes:
+      - application/json
+      description: Mark all unread notifications as read for a user
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.MarkAllAsReadResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Mark all notifications as read
+      tags:
+      - Notifications
+  /notifications/user/{userId}/unread:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve unread notifications for a user
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedNotificationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Get unread notifications
+      tags:
+      - Notifications
+  /notifications/user/{userId}/unread-count:
+    get:
+      consumes:
+      - application/json
+      description: Get the count of unread notifications for a user
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.UnreadCountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Get unread notification count
+      tags:
+      - Notifications
+  /preferences/user/{userId}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all notification preferences for a user
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-Id
+        type: string
+      - description: Request ID
+        in: header
+        name: X-Request-Id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dto.PreferenceResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user notification preferences
+      tags:
+      - Preferences
+    put:
+      consumes:
+      - application/json
+      description: Update or create notification preference for a user
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-Id
+        type: string
+      - description: Request ID
+        in: header
+        name: X-Request-Id
+        type: string
+      - description: Preference data
+        in: body
+        name: preference
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdatePreferenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PreferenceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update notification preference
+      tags:
+      - Preferences
+  /preferences/user/{userId}/category/{category}:
+    patch:
+      consumes:
+      - application/json
+      description: Update notification preferences for a specific category
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - description: Notification category (system, alerts, updates, marketing, security)
+        in: path
+        name: category
+        required: true
+        type: string
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-Id
+        type: string
+      - description: Request ID
+        in: header
+        name: X-Request-Id
+        type: string
+      - description: Category preference data
+        in: body
+        name: preference
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChannelPreferenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PreferenceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update category preference
+      tags:
+      - Preferences
+  /preferences/user/{userId}/channel/{channel}:
+    patch:
+      consumes:
+      - application/json
+      description: Update preferences for a specific notification channel (sms, email,
+        push, in_app)
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - description: Notification channel (sms, email, push, in_app)
+        in: path
+        name: channel
+        required: true
+        type: string
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-Id
+        type: string
+      - description: Request ID
+        in: header
+        name: X-Request-Id
+        type: string
+      - description: Channel preference data
+        in: body
+        name: preference
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ChannelPreferenceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PreferenceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update channel-specific preference
+      tags:
+      - Preferences
+  /reminders:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of reminders with optional filters
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by user ID
+        in: query
+        name: userId
+        type: string
+      - description: Start of scheduled date range (ISO8601)
+        in: query
+        name: scheduledFrom
+        type: string
+      - description: End of scheduled date range (ISO8601)
+        in: query
+        name: scheduledTo
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List reminders
+      tags:
+      - Reminders
+    post:
+      consumes:
+      - application/json
+      description: Create a new scheduled reminder
+      parameters:
+      - description: Tenant ID
+        in: header
+        name: X-Tenant-Id
+        type: string
+      - description: Request ID
+        in: header
+        name: X-Request-Id
+        type: string
+      - description: Reminder data
+        in: body
+        name: reminder
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateReminderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.ReminderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create reminder
+      tags:
+      - Reminders
+  /reminders/{reminderId}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a scheduled or cancelled reminder
+      parameters:
+      - description: Reminder ID
+        in: path
+        name: reminderId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ActionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete reminder
+      tags:
+      - Reminders
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a specific reminder
+      parameters:
+      - description: Reminder ID
+        in: path
+        name: reminderId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReminderResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get reminder by ID
+      tags:
+      - Reminders
+    put:
+      consumes:
+      - application/json
+      description: Update an existing scheduled reminder
+      parameters:
+      - description: Reminder ID
+        in: path
+        name: reminderId
+        required: true
+        type: string
+      - description: Reminder data
+        in: body
+        name: reminder
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateReminderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReminderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update reminder
+      tags:
+      - Reminders
+  /reminders/{reminderId}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel a scheduled or processing reminder
+      parameters:
+      - description: Reminder ID
+        in: path
+        name: reminderId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ReminderResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Cancel reminder
+      tags:
+      - Reminders
+  /reminders/user/{userId}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve reminders for a specific user
+      parameters:
+      - description: User ID
+        in: path
+        name: userId
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user reminders
+      tags:
+      - Reminders
+  /templates:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all notification templates with pagination and optional
+        filters
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: Page size
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by channel/type
+        in: query
+        name: channel
+        type: string
+      - description: Filter by locale
+        in: query
+        name: locale
+        type: string
+      - description: Filter by active status
+        in: query
+        name: isActive
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.PaginatedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Get all templates
+      tags:
+      - Templates
+    post:
+      consumes:
+      - application/json
+      description: Create a new notification template
+      parameters:
+      - description: Template data
+        in: body
+        name: template
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.TemplateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create notification template
+      tags:
+      - Templates
+  /templates/{templateId}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a notification template
+      parameters:
+      - description: Template ID
+        in: path
+        name: templateId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete template
+      tags:
+      - Templates
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a specific notification template
+      parameters:
+      - description: Template ID
+        in: path
+        name: templateId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TemplateResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get template by ID
+      tags:
+      - Templates
+    put:
+      consumes:
+      - application/json
+      description: Update an existing notification template
+      parameters:
+      - description: Template ID
+        in: path
+        name: templateId
+        required: true
+        type: string
+      - description: Template data
+        in: body
+        name: template
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Update template
+      tags:
+      - Templates
+  /templates/{templateId}/render-preview:
+    post:
+      consumes:
+      - application/json
+      description: Render a template with sample variables to preview the output
+      parameters:
+      - description: Template ID
+        in: path
+        name: templateId
+        required: true
+        type: string
+      - description: Preview data
+        in: body
+        name: preview
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RenderPreviewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.RenderPreviewResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Render template preview
+      tags:
+      - Templates
+  /templates/{templateId}/status:
+    patch:
+      consumes:
+      - application/json
+      description: Activate or deactivate a template
+      parameters:
+      - description: Template ID
+        in: path
+        name: templateId
+        required: true
+        type: string
+      - description: Status update
+        in: body
+        name: status
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TemplateResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Update template status
+      tags:
+      - Templates
+  /templates/key/{key}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a template by its programmatic key (e.g., "auth.otp.sms")
+      parameters:
+      - description: Template key
+        in: path
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.TemplateResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get template by key
+      tags:
+      - Templates
+  /templates/render-preview:
+    post:
+      consumes:
+      - application/json
+      description: Render a template with sample variables using its programmatic
+        key
+      parameters:
+      - description: Preview data (supports templateKey field)
+        in: body
+        name: preview
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RenderPreviewRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.RenderPreviewResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Render template preview by key
+      tags:
+      - Templates
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

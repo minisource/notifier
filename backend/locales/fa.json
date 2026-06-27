@@ -1,0 +1,57 @@
+{
+  "notifications": {
+    "notification_created": "اعلان با موفقیت ایجاد شد",
+    "notification_sent": "اعلان ارسال شد",
+    "notification_failed": "ارسال اعلان ناموفق بود",
+    "notification_canceled": "اعلان لغو شد",
+    "notification_scheduled": "اعلان زمان‌بندی شد",
+    "notification_digest": "خلاصه روزانه",
+
+    "sms_sent": "پیامک با موفقیت ارسال شد",
+    "sms_failed": "ارسال پیامک ناموفق بود",
+    "email_sent": "ایمیل با موفقیت ارسال شد",
+    "email_failed": "ارسال ایمیل ناموفق بود",
+    "push_sent": "اعلان پوش ارسال شد",
+    "push_failed": "ارسال اعلان پوش ناموفق بود",
+    "inapp_new": "اعلان جدید",
+
+    "preference_updated": "تنظیمات بروزرسانی شد",
+    "preference_channel_disabled": "کانال غیرفعال است",
+    "preference_quiet_hours": "در ساعات خلوت",
+    "preference_digest_only": "فقط خلاصه",
+
+    "digest_subject": "شما %d اعلان جدید دارید",
+    "digest_empty": "اعلان جدیدی ندارید",
+    "digest_email_header": "خلاصه اعلان‌های شما",
+    "digest_sms_header": "خلاصه: %d اعلان",
+    "digest_push_title": "%d مورد جدید",
+
+    "template_not_found": "قالب پیدا نشد",
+    "template_rendered": "قالب پردازش شد",
+    "template_rendered_preview": "پیش‌نمایش قالب پردازش شد",
+
+    "errors": {
+      "invalid_request": "درخواست نامعتبر",
+      "not_found": "منبع پیدا نشد",
+      "internal_error": "خطای داخلی سرور",
+      "unauthorized": "دسترسی غیرمجاز",
+      "forbidden": "ممنوع",
+      "validation_error": "خطای اعتبارسنجی",
+      "rate_limited": "تعداد درخواست‌ها بیش از حد مجاز است، لطفاً بعداً تلاش کنید",
+      "service_unavailable": "سرویس موقتاً در دسترس نیست"
+    }
+  },
+
+  "preferences": {
+    "quiet_hours_start": "شروع ساعات خلوت",
+    "quiet_hours_end": "پایان ساعات خلوت",
+    "timezone": "منطقه زمانی",
+    "frequency_daily": "روزانه",
+    "frequency_weekly": "هفتگی",
+    "frequency_monthly": "ماهانه",
+    "channel_email": "ایمیل",
+    "channel_sms": "پیامک",
+    "channel_push": "اعلان پوش",
+    "channel_in_app": "درون برنامه"
+  }
+}

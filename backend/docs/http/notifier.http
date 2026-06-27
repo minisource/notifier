@@ -1,0 +1,234 @@
+### ==========================================
+### Notifier Service — HTTP API Examples
+### ==========================================
+### Usage:
+###   1. Install VS Code REST Client extension
+###   2. Set variables below (or in VS Code settings)
+###   3. Click "Send Request" above each request
+### ==========================================
+
+@baseUrl = http://localhost:9002
+@userToken = YOUR_USER_JWT_TOKEN
+@adminToken = YOUR_ADMIN_JWT_TOKEN
+@serviceToken = YOUR_SERVICE_JWT_TOKEN
+@tenantId = default
+
+### ==========================================
+### 1. Health & Readiness
+### ==========================================
+
+### Public health check
+GET {{baseUrl}}/api/v1/health/
+Accept: application/json
+
+### Public readiness
+GET {{baseUrl}}/api/v1/ready
+Accept: application/json
+
+### ==========================================
+### 2. Service → Notification Creation
+### ==========================================
+
+### Create notification (service auth)
+POST {{baseUrl}}/api/v1/service/notifications
+Authorization: Bearer {{serviceToken}}
+Content-Type: application/json
+Idempotency-Key: {{$guid}}
+X-Tenant-Id: {{tenantId}}
+
+{
+  "userId": "00000000-0000-0000-0000-000000000001",
+  "type": "in_app",
+  "priority": "normal",
+  "body": "Hello from service!",
+  "subject": "Test Notification"
+}
+
+### Create batch notifications
+POST {{baseUrl}}/api/v1/service/notifications/batch
+Authorization: Bearer {{serviceToken}}
+Content-Type: application/json
+
+{
+  "notifications": [
+    {
+      "userId": "00000000-0000-0000-0000-000000000001",
+      "type": "in_app",
+      "body": "Batch item 1"
+    },
+    {
+      "userId": "00000000-0000-0000-0000-000000000001",
+      "type": "email",
+      "body": "Batch item 2",
+      "recipientEmail": "test@example.com",
+      "subject": "Batch Test"
+    }
+  ]
+}
+
+### ==========================================
+### 3. User /me Endpoints
+### ==========================================
+
+### List my notifications
+GET {{baseUrl}}/api/v1/me/notifications?page=1&pageSize=10
+Authorization: Bearer {{userToken}}
+
+### Get unread count
+GET {{baseUrl}}/api/v1/me/notifications/unread-count
+Authorization: Bearer {{userToken}}
+
+### Mark all as read
+POST {{baseUrl}}/api/v1/me/notifications/read-all
+Authorization: Bearer {{userToken}}
+
+### Get my preferences
+GET {{baseUrl}}/api/v1/me/preferences
+Authorization: Bearer {{userToken}}
+
+### Update preferences
+PUT {{baseUrl}}/api/v1/me/preferences
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{
+  "type": "sms",
+  "isEnabled": true,
+  "allowInstant": true,
+  "allowDigest": false
+}
+
+### List my reminders
+GET {{baseUrl}}/api/v1/me/reminders
+Authorization: Bearer {{userToken}}
+
+### ==========================================
+### 4. Admin Endpoints
+### ==========================================
+
+### Dashboard overview
+GET {{baseUrl}}/api/v1/admin/dashboard/overview
+Authorization: Bearer {{adminToken}}
+
+### List all notifications (filter by status=failed)
+GET {{baseUrl}}/api/v1/admin/notifications?status=failed&page=1&pageSize=20
+Authorization: Bearer {{adminToken}}
+
+### Retry a failed notification
+POST {{baseUrl}}/api/v1/admin/notifications/NOTIFICATION_ID/retry
+Authorization: Bearer {{adminToken}}
+
+### List delivery attempts for a notification
+GET {{baseUrl}}/api/v1/admin/notifications/NOTIFICATION_ID/attempts
+Authorization: Bearer {{adminToken}}
+
+### List providers
+GET {{baseUrl}}/api/v1/admin/providers
+Authorization: Bearer {{adminToken}}
+
+### Provider health
+GET {{baseUrl}}/api/v1/admin/providers/health
+Authorization: Bearer {{adminToken}}
+
+### Test provider (dry-run)
+POST {{baseUrl}}/api/v1/admin/providers/sms-default/test
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "channel": "sms",
+  "recipient": "+989121234567",
+  "body": "Test notification from admin",
+  "dryRun": true
+}
+
+### List deliveries
+GET {{baseUrl}}/api/v1/admin/deliveries?status=failed&page=1
+Authorization: Bearer {{adminToken}}
+
+### Retry a delivery
+POST {{baseUrl}}/api/v1/admin/deliveries/DELIVERY_ID/retry
+Authorization: Bearer {{adminToken}}
+
+### Observability — health (detailed)
+GET {{baseUrl}}/api/v1/admin/observability/health
+Authorization: Bearer {{adminToken}}
+
+### Observability — metrics
+GET {{baseUrl}}/api/v1/admin/observability/metrics
+Authorization: Bearer {{adminToken}}
+
+### Observability — queue
+GET {{baseUrl}}/api/v1/admin/observability/queue
+Authorization: Bearer {{adminToken}}
+
+### Observability — workers
+GET {{baseUrl}}/api/v1/admin/observability/workers
+Authorization: Bearer {{adminToken}}
+
+### ==========================================
+### 5. Templates (Admin)
+### ==========================================
+
+### Create template
+POST {{baseUrl}}/api/v1/admin/templates
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "welcome-email",
+  "type": "email",
+  "subject": "Welcome {{userName}}!",
+  "body": "Hello {{userName}}, welcome to our service!",
+  "variables": ["userName"],
+  "isActive": true
+}
+
+### Render preview
+POST {{baseUrl}}/api/v1/admin/templates/render-preview
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "templateKey": "welcome-email",
+  "variables": {
+    "userName": "John"
+  }
+}
+
+### ==========================================
+### 6. Reminders
+### ==========================================
+
+### Create reminder
+POST {{baseUrl}}/api/v1/me/reminders
+Authorization: Bearer {{userToken}}
+Content-Type: application/json
+
+{
+  "userId": "00000000-0000-0000-0000-000000000001",
+  "type": "email",
+  "recipient": "user@example.com",
+  "subject": "Meeting Reminder",
+  "body": "Don't forget the meeting tomorrow!",
+  "scheduledAt": "2026-12-01T09:00:00Z"
+}
+
+### ==========================================
+### 7. Error Scenarios
+### ==========================================
+
+### Access admin without token (expect 401)
+GET {{baseUrl}}/api/v1/admin/dashboard/overview
+
+### Access admin with user token (expect 403)
+GET {{baseUrl}}/api/v1/admin/dashboard/overview
+Authorization: Bearer {{userToken}}
+
+### Retry already-sent notification (expect 409)
+POST {{baseUrl}}/api/v1/admin/notifications/SENT_NOTIFICATION_ID/retry
+Authorization: Bearer {{adminToken}}
+
+### Get non-existent notification (expect 404)
+GET {{baseUrl}}/api/v1/notifications/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{userToken}}
