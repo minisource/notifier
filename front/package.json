@@ -4,8 +4,8 @@
   "private": true,
   "description": "Notifier Service Admin Panel - Manage notifications, templates, and preferences",
   "scripts": {
-    "dev": "next dev",
-    "dev:turbo": "next dev --turbopack",
+    "dev": "next dev -p 3004",
+    "dev:turbo": "next dev --turbopack -p 3004",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -18,6 +18,12 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
+    "@minisource/api-core": "file:../../design-system/packages/api-core",
+    "@minisource/app-shell": "file:../../design-system/packages/app-shell",
+    "@minisource/auth-sdk": "file:../../design-system/packages/auth-sdk",
+    "@minisource/rhf": "file:../../design-system/packages/rhf",
+    "@minisource/tokens": "file:../../design-system/packages/tokens",
+    "@minisource/ui": "0.1.11",
     "@radix-ui/react-alert-dialog": "^1.1.17",
     "@radix-ui/react-avatar": "^1.1.2",
     "@radix-ui/react-dialog": "^1.1.4",
@@ -51,6 +57,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@parcel/watcher": "^2.4.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/node": "^22.10.2",
