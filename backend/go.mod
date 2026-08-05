@@ -13,8 +13,8 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.11.1
-	github.com/minisource/go-common v20260605-164702
-	github.com/minisource/go-sdk v20260605-164717
+	github.com/minisource/go-common v0.1.1
+	github.com/minisource/go-sdk v0.1.1
 	github.com/prometheus/client_golang v1.20.5
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggo/swag v1.16.6
@@ -24,7 +24,6 @@ require (
 	github.com/ucloud/ucloud-sdk-go v0.22.31
 	github.com/volcengine/volc-sdk-golang v1.0.202
 	go.opentelemetry.io/otel v1.40.0
-	go.opentelemetry.io/otel/exporters/jaeger v1.17.0
 	go.opentelemetry.io/otel/sdk v1.40.0
 	google.golang.org/grpc v1.78.0
 	google.golang.org/protobuf v1.36.10
