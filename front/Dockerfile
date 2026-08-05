@@ -1,43 +1,58 @@
-FROM node:20-alpine AS base
+# syntax=docker/dockerfile:1
 
-# Install dependencies only when needed
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
-WORKDIR /app
+# ── Builder ──────────────────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
 
-COPY package.json package-lock.json* ./
-RUN npm ci --only=production
+WORKDIR /src
 
-# Rebuild the source code only when needed
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
 
+# NOTE: design-system is not yet published to npm (Phase 6 pending).
+# Until then, this Dockerfile requires a monorepo context that includes
+# both design-system/ and notifier/front/ (i.e. build from MiniSource/ root).
+# After Phase 6: replace file: protocol with npm-published @minisource/* packages.
+
+# Copy design-system (needs to be in build context)
+COPY design-system/ ./design-system/
+COPY notifier/front/package.json notifier/front/package-lock.json ./notifier/front/
+
+# Install and build design-system (pnpm workspaces)
+WORKDIR /src/design-system
+RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN pnpm install --no-frozen-lockfile
+RUN pnpm build
+
+# Install notifier/front dependencies
+WORKDIR /src/notifier/front
+RUN npm ci --legacy-peer-deps --no-audit --no-fund
+
+# Build Next.js (standalone output)
+ENV NEXT_PUBLIC_NOTIFIER_AUTH_ENABLED=true
 RUN npm run build
 
-# Production image, copy all the files and run next
-FROM base AS runner
-WORKDIR /app
+# ── Runtime ──────────────────────────────────────────────────────────────────
+FROM node:20-alpine AS runner
 
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
+COPY --from=builder /src/notifier/front/public ./public
+COPY --from=builder /src/notifier/front/.next/standalone ./
+COPY --from=builder /src/notifier/front/.next/static ./.next/static
 
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
+RUN chown -R nextjs:nodejs /app
 USER nextjs
 
-EXPOSE 3000
+WORKDIR /app
+EXPOSE 3004
 
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
+ENV PORT=3004
+ENV HOSTNAME=0.0.0.0
+
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3004/notifier/dashboard || exit 1
 
 CMD ["node", "server.js"]

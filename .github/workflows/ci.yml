@@ -1,15 +1,124 @@
-﻿name: CI
+name: CI
 
 on:
-  push:
-    branches: [master, dev]
   pull_request:
     branches: [master]
+  push:
+    branches: [master]
+    tags: ["v*"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  build-and-push:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-go@0aaccfd150d50ccaeb58ebd88d36e91967a5f35b # v5.4.0
+        with:
+          go-version: "1.24"
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Check formatting
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            gofmt -s -l .
+            exit 1
+          fi
+
+      - name: Verify modules
+        run: go mod verify
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race -count=1 -timeout 300s ./...
+
+      - name: Build
+        run: go build ./...
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: repo
+
+      # design-system is needed for file: protocol — will be removed in Phase 7
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: minisource/design-system
+          path: design-system
+
+      - uses: actions/setup-node@499170d96c583f6812e20f444f95c6e587bd3b21 # v4.4.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: repo/front/package-lock.json
+
+      - name: Install dependencies
+        working-directory: repo/front
+        run: npm ci
+
+      - name: Lint
+        working-directory: repo/front
+        run: npm run lint
+
+      - name: Type check
+        working-directory: repo/front
+        run: npm run type-check
+
+      - name: Test
+        working-directory: repo/front
+        run: npm run test -- --run
+
+      - name: Build
+        working-directory: repo/front
+        run: npm run build
+
+  docker-backend:
+    name: Docker Backend
+    needs: backend
     uses: minisource/.github/.github/workflows/build-and-push.yml@main
     with:
-      image-name: minisource/notifier
+      image-name: ${{ secrets.DOCKERHUB_USERNAME }}/notifier-backend
+      dockerfile-path: backend/Dockerfile
+      build-context: .
       default-branch: master
-    secrets: inherit
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  # Frontend Docker requires design-system in context — BLOCKED until Phase 6/7
+  docker-frontend:
+    name: Docker Frontend
+    needs: frontend
+    runs-on: ubuntu-latest
+    if: false  # Disabled until Phase 7 — design-system not yet published
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: docker/setup-buildx-action@f7ce87c1d6bead3e36075b2ce75da1f6cc28aaca # v3.9.0
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@0adf9959216b96bec444f325f1e493d4aa344497 # v6.14.0
+        with:
+          context: .
+          file: front/Dockerfile
+          push: false
+          tags: notifier-frontend:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,39 +1,39 @@
-# Build stage
-FROM golang:1.26.0-alpine AS builder
+# syntax=docker/dockerfile:1
 
-# Install dependencies
-RUN apk add --no-cache git
+# ── Builder ──────────────────────────────────────────────────────────────────
+FROM golang:1.26-alpine AS builder
+
+WORKDIR /src
+
+# Copy source (vendor excluded via .dockerignore)
+COPY backend/ ./
+
+# Build with module download cache
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -mod=mod -trimpath -ldflags="-s -w" -o /notifier-server ./cmd/server
+
+# ── Runtime ──────────────────────────────────────────────────────────────────
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates tzdata curl
+
+# Non-root user
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup
+
+COPY --from=builder /notifier-server /app/notifier-server
+COPY backend/config/ /app/config/
+COPY backend/locales/ /app/locales/
+
+RUN mkdir -p /app/logs && chown -R appuser:appgroup /app
+USER appuser
 
 WORKDIR /app
-
-# Copy go mod files
-COPY go.mod go.sum ./
-
-# Download dependencies
-RUN go mod download
-
-# Copy source code
-COPY . .
-
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/server
-
-# Final stage
-FROM alpine:latest
-
-RUN apk --no-cache add ca-certificates tzdata
-
-WORKDIR /root/
-
-# Copy the binary from builder
-COPY --from=builder /app/main .
-COPY --from=builder /app/config ./config
-
-# Expose port
 EXPOSE 9002
 
-# Set environment variable
-ENV APP_ENV=docker
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -sf http://127.0.0.1:9002/health || exit 1
 
-# Run the application
-CMD ["./main"]
+ENTRYPOINT ["/app/notifier-server"]
