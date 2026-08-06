@@ -96,7 +96,7 @@ jobs:
     needs: backend
     uses: minisource/.github/.github/workflows/build-and-push.yml@main
     with:
-      image-name: ${{ secrets.DOCKERHUB_USERNAME }}/notifier-backend
+      image-name: minisource/notifier-backend
       dockerfile-path: backend/Dockerfile
       build-context: .
       default-branch: master
@@ -109,7 +109,7 @@ jobs:
     needs: frontend
     uses: minisource/.github/.github/workflows/build-and-push.yml@main
     with:
-      image-name: ${{ secrets.DOCKERHUB_USERNAME }}/notifier-frontend
+      image-name: minisource/notifier-frontend
       dockerfile-path: front/Dockerfile
       build-context: .
       default-branch: master
