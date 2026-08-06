@@ -26,12 +26,18 @@ jobs:
 
       - name: Vet
         run: go vet ./...
+        env:
+          GOFLAGS: -mod=mod
 
       - name: Test
         run: go test -race -count=1 -timeout 300s ./...
+        env:
+          GOFLAGS: -mod=mod
 
       - name: Build
         run: go build ./...
+        env:
+          GOFLAGS: -mod=mod
 
   docker-backend:
     name: Docker Publish Backend
@@ -41,7 +47,6 @@ jobs:
       image-name: minisource/notifier-backend
       dockerfile-path: backend/Dockerfile
       build-context: .
-      default-branch: master
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -54,7 +59,6 @@ jobs:
       image-name: minisource/notifier-frontend
       dockerfile-path: front/Dockerfile
       build-context: .
-      default-branch: master
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
