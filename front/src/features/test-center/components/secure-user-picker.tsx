@@ -104,7 +104,7 @@ export function SecureUserPicker({
           };
           setSelectedUser(userSummary);
         }
-      } catch (err: any) {
+      } catch {
         if (isSubscribed) {
           setSelectedUser({
             id: value,

@@ -53,7 +53,7 @@ export function TemplateTester({ onExecute, executing }: TemplateTesterProps) {
     let varsObj = {};
     try {
       varsObj = JSON.parse(previewVarsJson);
-    } catch (e) {
+    } catch {
       // fallback
     }
 

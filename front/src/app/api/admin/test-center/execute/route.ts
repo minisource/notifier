@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
   const startTime = performance.now();
   let statusCode = 500;
   let responseData: any = null;
-  let responseHeaders: Record<string, string> = {};
+  const responseHeaders: Record<string, string> = {};
   let duration = 0;
   let isSuccess = false;
   let errorMsg = '';
