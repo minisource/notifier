@@ -57,7 +57,7 @@ jobs:
     uses: minisource/.github/.github/workflows/docker-release.yml@main
     with:
       image-name: minisource/notifier-frontend
-      dockerfile-path: Dockerfile
+      dockerfile-path: front/Dockerfile
       build-context: front
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}

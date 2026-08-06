@@ -103,7 +103,7 @@ jobs:
     uses: minisource/.github/.github/workflows/build-and-push.yml@main
     with:
       image-name: minisource/notifier-frontend
-      dockerfile-path: Dockerfile
+      dockerfile-path: front/Dockerfile
       build-context: front
       default-branch: master
     secrets:
