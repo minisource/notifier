@@ -40,7 +40,7 @@ const statusColors: Record<string, string> = {
 export function NotificationTimeline({ notification }: NotificationTimelineProps) {
   const t = useTranslations();
   const params = useParams();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
   const isRtl = locale === 'fa';
 
   const events: TimelineEvent[] = [

@@ -1,29 +1,85 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/minisource/go-common/logging"
 	"github.com/minisource/go-common/response"
 	"github.com/minisource/notifier/api/v1/dto"
 	"github.com/minisource/notifier/internal/models"
+	"github.com/minisource/notifier/internal/provider"
 	"github.com/minisource/notifier/internal/repository"
+	"github.com/minisource/notifier/internal/service"
 
 )
 
 // ProviderHandler handles provider-related admin endpoints
 type ProviderHandler struct {
-	providerRepo repository.ProviderRepository
+	providerRepo    repository.ProviderRepository
+	notifRepo       repository.NotificationRepository
+	logger          logging.Logger
+	deliveryControl *service.DeliveryControlService
 }
 
-// NewProviderHandler creates a new provider handler
-func NewProviderHandler(providerRepo repository.ProviderRepository) *ProviderHandler {
+// NewProviderHandler creates a new provider handler. deliveryControl wires the
+// global outbound delivery pause into the provider test-send path so a real
+// (non dry-run) test message is never sent while delivery is frozen.
+func NewProviderHandler(
+	providerRepo repository.ProviderRepository,
+	notifRepo repository.NotificationRepository,
+	logger logging.Logger,
+	deliveryControl *service.DeliveryControlService,
+) *ProviderHandler {
 	return &ProviderHandler{
-		providerRepo: providerRepo,
+		providerRepo:    providerRepo,
+		notifRepo:       notifRepo,
+		logger:          logger,
+		deliveryControl: deliveryControl,
 	}
+}
+
+// providerStatsMap loads per-provider delivery stats keyed by provider name/type
+// so the UI can show success rate, latency, and last failure for each provider.
+func (h *ProviderHandler) providerStatsMap(ctx context.Context) map[string]*repository.ProviderStats {
+	stats, err := h.notifRepo.GetProviderStats(ctx)
+	if err != nil {
+		return map[string]*repository.ProviderStats{}
+	}
+	m := make(map[string]*repository.ProviderStats, len(stats))
+	for _, s := range stats {
+		m[s.Provider] = s
+	}
+	return m
+}
+
+// applyProviderStats merges aggregated delivery stats into a provider response.
+// Stats are keyed by the provider name stored on notifications — fall back to
+// the provider type when the name has no history yet.
+func applyProviderStats(resp *dto.ProviderResponse, p *models.Provider, stats map[string]*repository.ProviderStats) {
+	if resp == nil {
+		return
+	}
+	// The adapters record config.Provider (which is the provider Type, e.g.
+	// 'kavenegar') on notifications — so look up by type first, fall back to
+	// the display name for legacy data.
+	stat := stats[p.Type]
+	if stat == nil {
+		stat = stats[p.Name]
+	}
+	if stat == nil {
+		return
+	}
+	resp.SuccessRate = stat.SuccessRate
+	resp.AverageLatencyMs = int64(stat.AverageLatencyMs)
+	resp.LastSuccessAt = stat.LastSuccessAt
+	resp.LastFailureAt = stat.LastFailureAt
+	resp.LastError = stat.LastError
 }
 
 // secretSuffixes are config key suffixes that should be redacted in provider responses
@@ -47,6 +103,46 @@ var validChannels = map[string]bool{
 // validStatuses defines the allowed provider statuses
 var validStatuses = map[string]bool{
 	"active": true, "inactive": true, "disabled": true, "error": true,
+}
+
+// resolveTenantID returns the effective tenant scope for this request.
+// Priority: tenantId query param > X-Tenant-Id header. Returns nil when the
+// caller is in the global/all-tenants scope (no tenant filter applied).
+func resolveTenantID(c *fiber.Ctx) *uuid.UUID {
+	raw := c.Query("tenantId")
+	if raw == "" {
+		raw = c.Get("X-Tenant-Id")
+	}
+	if raw == "" || raw == "all" || raw == "default" {
+		return nil
+	}
+	if tid, err := uuid.Parse(raw); err == nil {
+		return &tid
+	}
+	return nil
+}
+
+// providerAccessible reports whether a provider is visible/manageable under the
+// given tenant scope. Global providers (tenant_id NULL) are visible to every
+// tenant; a tenant-specific provider is only visible inside its own tenant.
+// A nil scope (global view) can see everything.
+func providerAccessible(p *models.Provider, tenantID *uuid.UUID) bool {
+	if tenantID == nil {
+		return true
+	}
+	if p.TenantID == nil {
+		return true
+	}
+	return *p.TenantID == *tenantID
+}
+
+// sameTenantScope reports whether two tenant scopes are exactly equal,
+// treating nil (global) as a distinct scope from any specific tenant.
+func sameTenantScope(a, b *uuid.UUID) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }
 
 // isSecretKey checks if a config key name indicates a secret value
@@ -134,6 +230,7 @@ func mapProviderToResponse(p *models.Provider) *dto.ProviderResponse {
 
 	resp := &dto.ProviderResponse{
 		ID:          p.ID.String(),
+		TenantID:    p.TenantID,
 		Name:        p.Name,
 		Channel:     p.Channel,
 		Type:        p.Type,
@@ -209,7 +306,27 @@ func (h *ProviderHandler) CreateProvider(c *fiber.Ctx) error {
 		status = models.ProviderStatusActive
 	}
 
+	// Tenant scoping: an explicit body tenantId is authoritative. "all"/"default"
+	// means global (nil); a UUID means a specific tenant. Only when the body
+	// omits tenantId entirely do we fall back to the X-Tenant-Id header so
+	// providers created while a tenant is active belong to that tenant.
+	var tenantID *uuid.UUID
+	if req.TenantID != "" {
+		if req.TenantID == "all" || req.TenantID == "default" {
+			tenantID = nil
+		} else {
+			tid, err := uuid.Parse(req.TenantID)
+			if err != nil {
+				return response.BadRequest(c, "INVALID_TENANT_ID", "tenantId is not a valid tenant UUID")
+			}
+			tenantID = &tid
+		}
+	} else {
+		tenantID = resolveTenantID(c)
+	}
+
 	provider := &models.Provider{
+		TenantID:     tenantID,
 		Name:         req.Name,
 		Channel:      req.Channel,
 		Type:         req.Type,
@@ -227,7 +344,9 @@ func (h *ProviderHandler) CreateProvider(c *fiber.Ctx) error {
 		return response.InternalError(c, "Failed to create provider: "+err.Error())
 	}
 
-	return response.Created(c, mapProviderToResponse(provider))
+	resp := mapProviderToResponse(provider)
+	applyProviderStats(resp, provider, h.providerStatsMap(c.Context()))
+	return response.Created(c, resp)
 }
 
 // ============================================
@@ -261,7 +380,14 @@ func (h *ProviderHandler) GetProvider(c *fiber.Ctx) error {
 		return response.NotFound(c, "Provider not found")
 	}
 
-	return response.OK(c, mapProviderToResponse(provider))
+	// Tenant isolation: do not leak providers from other tenants
+	if !providerAccessible(provider, resolveTenantID(c)) {
+		return response.NotFound(c, "Provider not found")
+	}
+
+	resp := mapProviderToResponse(provider)
+	applyProviderStats(resp, provider, h.providerStatsMap(c.Context()))
+	return response.OK(c, resp)
 }
 
 // ============================================
@@ -296,11 +422,29 @@ func (h *ProviderHandler) UpdateProvider(c *fiber.Ctx) error {
 		return response.NotFound(c, "Provider not found")
 	}
 
+	// Tenant isolation
+	if !providerAccessible(existing, resolveTenantID(c)) {
+		return response.NotFound(c, "Provider not found")
+	}
+
 	req := new(dto.UpdateProviderRequest)
 	if err := c.BodyParser(req); err != nil {
 		return response.BadRequest(c, "INVALID_REQUEST", "Invalid provider data")
 	}
 
+	// Tenant re-scoping: "all"/"default" clears to global, a UUID moves the
+	// provider to that tenant, empty leaves the current tenant unchanged.
+	if req.TenantID != "" {
+		if req.TenantID == "all" || req.TenantID == "default" {
+			existing.TenantID = nil
+		} else {
+			tid, err := uuid.Parse(req.TenantID)
+			if err != nil {
+				return response.BadRequest(c, "INVALID_TENANT_ID", "tenantId is not a valid tenant UUID")
+			}
+			existing.TenantID = &tid
+		}
+	}
 	if req.Name != "" {
 		existing.Name = req.Name
 	}
@@ -350,7 +494,9 @@ func (h *ProviderHandler) UpdateProvider(c *fiber.Ctx) error {
 		return response.InternalError(c, "Failed to update provider: "+err.Error())
 	}
 
-	return response.OK(c, mapProviderToResponse(existing))
+	resp := mapProviderToResponse(existing)
+	applyProviderStats(resp, existing, h.providerStatsMap(c.Context()))
+	return response.OK(c, resp)
 }
 
 // ============================================
@@ -381,6 +527,11 @@ func (h *ProviderHandler) DeleteProvider(c *fiber.Ctx) error {
 		return response.InternalError(c, "Failed to get provider")
 	}
 	if existing == nil {
+		return response.NotFound(c, "Provider not found")
+	}
+
+	// Tenant isolation
+	if !providerAccessible(existing, resolveTenantID(c)) {
 		return response.NotFound(c, "Provider not found")
 	}
 
@@ -427,16 +578,23 @@ func (h *ProviderHandler) SetDefaultProvider(c *fiber.Ctx) error {
 		return response.NotFound(c, "Provider not found")
 	}
 
+	// Tenant isolation
+	if !providerAccessible(existing, resolveTenantID(c)) {
+		return response.NotFound(c, "Provider not found")
+	}
+
 	req := new(dto.SetDefaultProviderRequest)
 	if err := c.BodyParser(req); err != nil {
 		return response.BadRequest(c, "INVALID_REQUEST", "Invalid request body")
 	}
 
 	if req.IsDefault {
-		channelProviders, err := h.providerRepo.List(c.Context(), existing.Channel)
+		// Only unset defaults within the exact same tenant scope: a global default
+		// must not clobber tenant-specific defaults and vice versa.
+		channelProviders, err := h.providerRepo.List(c.Context(), existing.Channel, existing.TenantID)
 		if err == nil {
 			for _, p := range channelProviders {
-				if p.ID != existing.ID && p.IsDefault {
+				if p.ID != existing.ID && sameTenantScope(p.TenantID, existing.TenantID) && p.IsDefault {
 					p.IsDefault = false
 					_ = h.providerRepo.Update(c.Context(), p)
 				}
@@ -450,7 +608,9 @@ func (h *ProviderHandler) SetDefaultProvider(c *fiber.Ctx) error {
 		return response.InternalError(c, "Failed to update provider default status: "+err.Error())
 	}
 
-	return response.OK(c, mapProviderToResponse(existing))
+	resp := mapProviderToResponse(existing)
+	applyProviderStats(resp, existing, h.providerStatsMap(c.Context()))
+	return response.OK(c, resp)
 }
 
 // ============================================
@@ -485,9 +645,14 @@ func (h *ProviderHandler) ToggleProviderStatus(c *fiber.Ctx) error {
 		return response.NotFound(c, "Provider not found")
 	}
 
+	// Tenant isolation
+	if !providerAccessible(existing, resolveTenantID(c)) {
+		return response.NotFound(c, "Provider not found")
+	}
+
 	req := new(dto.ToggleProviderStatusRequest)
 	if err := c.BodyParser(req); err != nil {
-		return response.BadRequest(c, "INVALID_REQUEST", "Invalid status data")
+		return response.BadRequest(c, "INVALID_STATUS", "Invalid status data")
 	}
 
 	if req.Status != "" {
@@ -509,7 +674,9 @@ func (h *ProviderHandler) ToggleProviderStatus(c *fiber.Ctx) error {
 		return response.InternalError(c, "Failed to update provider status: "+err.Error())
 	}
 
-	return response.OK(c, mapProviderToResponse(existing))
+	resp := mapProviderToResponse(existing)
+	applyProviderStats(resp, existing, h.providerStatsMap(c.Context()))
+	return response.OK(c, resp)
 }
 
 // ============================================
@@ -533,15 +700,18 @@ func (h *ProviderHandler) ListProviders(c *fiber.Ctx) error {
 	channelFilter := c.Query("channel")
 	statusFilter := c.Query("status")
 	typeFilter := c.Query("providerType")
+	tenantID := resolveTenantID(c)
 
-	dbProviders, err := h.providerRepo.List(c.Context(), channelFilter)
+	dbProviders, err := h.providerRepo.List(c.Context(), channelFilter, tenantID)
 	if err != nil {
 		return response.InternalError(c, "Failed to list providers: "+err.Error())
 	}
 
+	stats := h.providerStatsMap(c.Context())
 	providers := make([]*dto.ProviderResponse, 0, len(dbProviders))
 	for _, p := range dbProviders {
 		resp := mapProviderToResponse(p)
+		applyProviderStats(resp, p, stats)
 		if statusFilter != "" && resp.Status != statusFilter {
 			continue
 		}
@@ -555,73 +725,70 @@ func (h *ProviderHandler) ListProviders(c *fiber.Ctx) error {
 }
 
 // ============================================
-// GetProviderHealth
+// providerHealthCheck — REAL checks against each provider's own API
 // ============================================
 
-// GetProviderHealth godoc
-// @Summary Get provider health
-// @Description Retrieve health status of all providers based on status/config validity
-// @Tags Providers
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} dto.ProviderHealthResponse
-// @Failure 500 {object} dto.ErrorResponse
-// @Router /admin/providers/health [get]
-func (h *ProviderHandler) GetProviderHealth(c *fiber.Ctx) error {
+// checkAllProviders runs a REAL connectivity/credential check against every
+// enabled provider's own API (Kavenegar account/info, SMTP handshake, ...).
+// Each check is bounded by its own timeout so one hung provider can't stall
+// the rest. Disabled providers are reported without hitting the network.
+func (h *ProviderHandler) checkAllProviders(c *fiber.Ctx) *dto.ProviderHealthResponse {
 	ctx := c.Context()
-	healthItems := make([]*dto.ProviderHealthItem, 0)
 	checkedAt := time.Now()
 
-	dbProviders, err := h.providerRepo.List(ctx, "")
+	dbProviders, err := h.providerRepo.List(ctx, "", resolveTenantID(c))
 	if err != nil {
-		return response.InternalError(c, "Failed to get provider health: "+err.Error())
+		h.logger.Warn(logging.General, logging.Select, "Failed to list providers for health check", map[logging.ExtraKey]interface{}{
+			logging.ExtraKey("error"): err.Error(),
+		})
+		return &dto.ProviderHealthResponse{CheckedAt: checkedAt}
 	}
 
-	for _, p := range dbProviders {
-		switch p.Status {
-		case models.ProviderStatusActive:
-			healthItems = append(healthItems, &dto.ProviderHealthItem{
-				Name:    p.Name,
-				Channel: p.Channel,
-				Status:  "healthy",
-			})
-		case models.ProviderStatusInactive:
-			healthItems = append(healthItems, &dto.ProviderHealthItem{
-				Name:    p.Name,
-				Channel: p.Channel,
-				Status:  "degraded",
-			})
-		case models.ProviderStatusDisabled:
-			healthItems = append(healthItems, &dto.ProviderHealthItem{
-				Name:    p.Name,
-				Channel: p.Channel,
-				Status:  "disabled",
-			})
-		case models.ProviderStatusError:
-			healthItems = append(healthItems, &dto.ProviderHealthItem{
-				Name:    p.Name,
-				Channel: p.Channel,
-				Status:  "down",
-			})
-		default:
-			healthItems = append(healthItems, &dto.ProviderHealthItem{
-				Name:    p.Name,
-				Channel: p.Channel,
-				Status:  "unknown",
-			})
+	type itemWithIdx struct {
+		idx  int
+		item *dto.ProviderHealthItem
+	}
+
+	items := make([]*dto.ProviderHealthItem, len(dbProviders))
+	results := make(chan itemWithIdx, len(dbProviders))
+	var wg sync.WaitGroup
+
+	for i, p := range dbProviders {
+		wg.Add(1)
+		go func(idx int, prov *models.Provider) {
+			defer wg.Done()
+			checkCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+			defer cancel()
+			res := provider.CheckProvider(checkCtx, prov)
+			results <- itemWithIdx{idx: idx, item: &dto.ProviderHealthItem{
+				ProviderID: res.ProviderID,
+				Name:       res.Name,
+				Channel:    res.Channel,
+				Type:       res.Type,
+				Status:     res.Status,
+				LatencyMs:  res.LatencyMs,
+				Message:    res.Message,
+				Error:      res.Error,
+				CheckedAt:  res.CheckedAt,
+			}}
+		}(i, p)
+	}
+	wg.Wait()
+	close(results)
+
+	for r := range results {
+		items[r.idx] = r.item
+	}
+
+	var healthyCount, degradedCount, downCount, disabledCount int64
+	for _, item := range items {
+		if item == nil {
+			continue
 		}
-	}
-
-	healthyCount := int64(0)
-	degradedCount := int64(0)
-	downCount := int64(0)
-	disabledCount := int64(0)
-	for _, item := range healthItems {
 		switch item.Status {
 		case "healthy":
 			healthyCount++
-		case "degraded":
+		case "degraded", "unsupported":
 			degradedCount++
 		case "down":
 			downCount++
@@ -630,14 +797,50 @@ func (h *ProviderHandler) GetProviderHealth(c *fiber.Ctx) error {
 		}
 	}
 
-	return response.OK(c, &dto.ProviderHealthResponse{
-		Providers:     healthItems,
+	return &dto.ProviderHealthResponse{
+		Providers:     items,
 		HealthyCount:  healthyCount,
 		DegradedCount: degradedCount,
 		DownCount:     downCount,
 		DisabledCount: disabledCount,
 		CheckedAt:     checkedAt,
-	})
+	}
+}
+
+// ============================================
+// GetProviderHealth
+// ============================================
+
+// GetProviderHealth godoc
+// @Summary Get provider health
+// @Description Run real connectivity checks against every provider's own API and return health status
+// @Tags Providers
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dto.ProviderHealthResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /admin/providers/health [get]
+func (h *ProviderHandler) GetProviderHealth(c *fiber.Ctx) error {
+	return response.OK(c, h.checkAllProviders(c))
+}
+
+// ============================================
+// HealthCheckAllProviders
+// ============================================
+
+// HealthCheckAllProviders godoc
+// @Summary Check all providers health
+// @Description Run real connectivity checks against all providers' own APIs and return the aggregate result
+// @Tags Providers
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dto.ProviderHealthResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /admin/providers/health-check [post]
+func (h *ProviderHandler) HealthCheckAllProviders(c *fiber.Ctx) error {
+	return response.OK(c, h.checkAllProviders(c))
 }
 
 // ============================================
@@ -646,7 +849,7 @@ func (h *ProviderHandler) GetProviderHealth(c *fiber.Ctx) error {
 
 // TestProvider godoc
 // @Summary Test provider
-// @Description Test a specific provider connection (dry-run by default)
+// @Description Run a real connectivity check against the provider's own API (dry-run), or send a real test message when dryRun=false and a recipient is provided
 // @Tags Providers
 // @Accept json
 // @Produce json
@@ -665,42 +868,106 @@ func (h *ProviderHandler) TestProvider(c *fiber.Ctx) error {
 
 	req := new(dto.ProviderTestRequest)
 	if err := c.BodyParser(req); err != nil {
-		req = &dto.ProviderTestRequest{DryRun: true}
+		req = &dto.ProviderTestRequest{}
+	}
+
+	// DryRun defaults to true when omitted: a plain connectivity/credential check.
+	dryRun := true
+	if req.DryRun != nil {
+		dryRun = *req.DryRun
 	}
 
 	providerID, parseErr := uuid.Parse(providerIDStr)
-	providerFound := false
-	channel := req.Channel
+	if parseErr != nil {
+		return response.BadRequest(c, "INVALID_PROVIDER_ID", "Invalid provider ID")
+	}
 
-	if parseErr == nil {
-		provider, err := h.providerRepo.GetByID(c.Context(), providerID)
-		if err == nil && provider != nil {
-			providerFound = true
-			if channel == "" {
-				channel = provider.Channel
-			}
+	prov, err := h.providerRepo.GetByID(c.Context(), providerID)
+	if err != nil {
+		return response.InternalError(c, "Failed to get provider")
+	}
+	if prov == nil {
+		return response.NotFound(c, "Provider not found")
+	}
+	if !providerAccessible(prov, resolveTenantID(c)) {
+		return response.NotFound(c, "Provider not found")
+	}
+
+	channel := prov.Channel
+
+	// ---- Non dry-run: send a REAL test message through the provider ----
+	// A test-send is an outbound delivery — it is frozen while the global
+	// outbound delivery pause is active, exactly like retries/fallbacks/manual
+	// resends. The backend gate is authoritative regardless of UI state.
+	if !dryRun && h.deliveryControl != nil && h.deliveryControl.IsPaused(c.Context()) {
+		return response.BadRequest(c, "DELIVERY_PAUSED", "Outbound delivery is paused — test messages cannot be sent until delivery is resumed")
+	}
+
+	if !dryRun {
+		if req.Recipient == "" {
+			return response.BadRequest(c, "RECIPIENT_REQUIRED", "recipient is required for a real (non dry-run) provider test")
 		}
+
+		testCtx, cancel := context.WithTimeout(c.Context(), 20*time.Second)
+		defer cancel()
+
+		msgID, latency, sendErr := provider.SendTestMessage(testCtx, prov, req.Recipient, req.Subject, req.Body)
+		if sendErr != nil {
+			return response.OK(c, &dto.ProviderTestResponse{
+				ProviderID: providerIDStr,
+				Channel:    channel,
+				DryRun:     false,
+				Success:    false,
+				Status:     "failed",
+				Message:    "Provider send failed: " + sendErr.Error(),
+				LatencyMs:  latency,
+				CheckedAt:  time.Now(),
+			})
+		}
+
+		return response.OK(c, &dto.ProviderTestResponse{
+			ProviderID:                providerIDStr,
+			Channel:                   channel,
+			DryRun:                    false,
+			Success:                   true,
+			Status:                    "sent",
+			Message:                   "Provider accepted the test message.",
+			ProviderMessageID:         msgID,
+			ProviderResponseSanitized: "accepted",
+			LatencyMs:                 latency,
+			CheckedAt:                 time.Now(),
+		})
 	}
 
-	if !providerFound && channel == "" {
-		channel = "unknown"
-	}
+	// ---- Dry-run (default): REAL connectivity/credential check ----
+	checkCtx, cancel := context.WithTimeout(c.Context(), 15*time.Second)
+	defer cancel()
 
-	responseMessage := "Provider test simulated (dry-run)."
-	if !providerFound {
-		responseMessage = "Provider is not configured. Dry-run simulation returned without real provider check."
-	} else {
-		responseMessage = "Provider configuration is valid. Dry-run simulation returned successfully."
+	res := provider.CheckProvider(checkCtx, prov)
+
+	if res.Status == "healthy" {
+		return response.OK(c, &dto.ProviderTestResponse{
+			ProviderID:                providerIDStr,
+			Channel:                   channel,
+			DryRun:                    true,
+			Success:                   true,
+			Status:                    "healthy",
+			Message:                   res.Message,
+			ProviderResponseSanitized: res.Message,
+			LatencyMs:                 res.LatencyMs,
+			CheckedAt:                 res.CheckedAt,
+		})
 	}
 
 	return response.OK(c, &dto.ProviderTestResponse{
-		ProviderID: providerIDStr,
-		Channel:    channel,
-		DryRun:     true,
-		Success:    true,
-		Status:     "simulated",
-		Message:    responseMessage,
-		LatencyMs:  5,
-		CheckedAt:  time.Now(),
+		ProviderID:                providerIDStr,
+		Channel:                   channel,
+		DryRun:                    true,
+		Success:                   false,
+		Status:                    res.Status,
+		Message:                   res.Message,
+		ProviderResponseSanitized: res.Error,
+		LatencyMs:                 res.LatencyMs,
+		CheckedAt:                 res.CheckedAt,
 	})
 }

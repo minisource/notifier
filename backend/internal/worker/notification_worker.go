@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"math"
 	"sync"
 	"time"
@@ -30,15 +31,34 @@ type NotificationWorker struct {
 	config        *config.Config
 	notifRepo     repository.NotificationRepository
 	logRepo       repository.NotificationLogRepository
+	attemptRepo   repository.ProviderAttemptRepository
 	smsHandler    SMSHandler
 	emailHandler  EmailHandler
 	pushHandler   PushHandler
 	digestService DigestProcessor
-}
+	deliveryControl DeliveryControl}
 
 // DigestProcessor interface for processing digest notifications
 type DigestProcessor interface {
 	ProcessDueDigests(ctx context.Context)
+}
+
+// DeliveryControl is the global outbound-delivery pause reader used by the
+// worker. Defined here (not in the service package) to avoid an import cycle:
+// the service package imports the worker, so the worker must only depend on
+// this interface. The service's DeliveryControlService satisfies it.
+type DeliveryControl interface {
+	// IsPaused reports whether outbound provider execution must stop.
+	IsPaused(ctx context.Context) bool
+	// HoldNotification freezes one delivery (status=held) without consuming
+	// its retry budget.
+	HoldNotification(ctx context.Context, notificationID uuid.UUID, reason string) error
+	// ReleaseHeld re-queues up to limit held deliveries (controlled release).
+	ReleaseHeld(ctx context.Context, limit int) (int64, error)
+	// CheckAutoResume resumes automatically when a pause deadline expired.
+	CheckAutoResume(ctx context.Context) error
+	// PurgeExpiredIdempotency removes expired pause/resume idempotency records.
+	PurgeExpiredIdempotency(ctx context.Context) (int64, error)
 }
 
 
@@ -63,10 +83,12 @@ func NewNotificationWorker(
 	logger logging.Logger,
 	notifRepo repository.NotificationRepository,
 	logRepo repository.NotificationLogRepository,
+	attemptRepo repository.ProviderAttemptRepository,
 	smsHandler SMSHandler,
 	emailHandler EmailHandler,
 	pushHandler PushHandler,
 	digestProcessor DigestProcessor,
+	deliveryControl DeliveryControl,
 ) *NotificationWorker {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -79,10 +101,12 @@ func NewNotificationWorker(
 		config:        cfg,
 		notifRepo:     notifRepo,
 		logRepo:       logRepo,
+		attemptRepo:   attemptRepo,
 		smsHandler:    smsHandler,
 		emailHandler:  emailHandler,
 		pushHandler:   pushHandler,
 		digestService: digestProcessor,
+		deliveryControl: deliveryControl,
 	}
 }
 
@@ -117,6 +141,19 @@ func (w *NotificationWorker) Start() {
 	if w.config.Digest.Enabled {
 		w.wg.Add(1)
 		go w.digestProcessor()
+	}
+
+	// Start provider attempt retention cleanup (provider request lifecycle logs)
+	if w.attemptRepo != nil {
+		w.wg.Add(1)
+		go w.attemptCleanupProcessor()
+	}
+
+	// Start global delivery-pause control processor: auto-resume on deadline
+	// and controlled release of held work (no thundering herd).
+	if w.deliveryControl != nil {
+		w.wg.Add(1)
+		go w.deliveryControlProcessor()
 	}
 
 	w.logger.Info(logging.General, logging.Startup, "Notification workers started successfully", nil)
@@ -169,6 +206,12 @@ func (w *NotificationWorker) SendNotificationSync(ctx context.Context, notificat
 		"type":           notification.Type,
 	})
 
+	// Pause gate — synchronous sends are also frozen.
+	if w.deliveryControl != nil && w.deliveryControl.IsPaused(ctx) {
+		w.holdForPause(ctx, notification, "sync_send")
+		return ErrDeliveryPaused
+	}
+
 	var providerMsgID string
 	var err error
 
@@ -199,6 +242,66 @@ func (w *NotificationWorker) SendNotificationSync(ctx context.Context, notificat
 	})
 
 	return nil
+}
+
+// deliveryControlProcessor periodically checks for auto-resume and releases a
+// bounded batch of held deliveries so a large backlog resumes gradually.
+func (w *NotificationWorker) deliveryControlProcessor() {
+	defer w.wg.Done()
+
+	interval := 5 * time.Second
+	if w.config.DeliveryControl.ReleaseIntervalSec > 0 {
+		interval = time.Duration(w.config.DeliveryControl.ReleaseIntervalSec) * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	w.logger.Debug(logging.General, logging.Startup, "Delivery control processor started", map[logging.ExtraKey]interface{}{
+		"interval": interval.String(),
+	})
+
+	for {
+		select {
+		case <-ticker.C:
+			ctx := context.Background()
+			// 1) Auto-resume when an optional pause deadline passed.
+			if err := w.deliveryControl.CheckAutoResume(ctx); err != nil {
+				w.logger.Warn(logging.General, logging.Update, "Delivery control auto-resume check failed", map[logging.ExtraKey]interface{}{
+					"error": err.Error(),
+				})
+			}
+			// 2) Controlled release of held deliveries (no-op while paused).
+			if _, err := w.deliveryControl.ReleaseHeld(ctx, w.config.DeliveryControl.ReleaseBatchSize); err != nil {
+				w.logger.Warn(logging.General, logging.Update, "Delivery control release failed", map[logging.ExtraKey]interface{}{
+					"error": err.Error(),
+				})
+			}
+			// 3) Lease recovery: re-queue deliveries stuck in sending/processing
+			// past the age threshold after a worker crash. Never consumes retry
+			// budget; the DB poller picks them up again.
+			if age := w.config.DeliveryControl.StuckSendingAgeSec; age > 0 {
+				cutoff := time.Now().Add(-time.Duration(age) * time.Second)
+				if recovered, rerr := w.notifRepo.RecoverStuckSending(ctx, cutoff); rerr != nil {
+					w.logger.Warn(logging.General, logging.Update, "Stuck sending recovery failed", map[logging.ExtraKey]interface{}{
+						"error": rerr.Error(),
+					})
+				} else if recovered > 0 {
+					w.logger.Info(logging.General, logging.Update, "Recovered stuck sending deliveries", map[logging.ExtraKey]interface{}{
+						"count": recovered,
+					})
+				}
+			}
+			// 4) Bounded retention: purge expired pause/resume idempotency rows.
+			if _, perr := w.deliveryControl.PurgeExpiredIdempotency(ctx); perr != nil {
+				w.logger.Warn(logging.General, logging.Delete, "Idempotency purge failed", map[logging.ExtraKey]interface{}{
+					"error": perr.Error(),
+				})
+			}
+		case <-w.ctx.Done():
+			w.logger.Debug(logging.General, logging.Startup, "Delivery control processor shutting down", nil)
+			return
+		}
+	}
 }
 
 // worker processes jobs from the queue
@@ -244,6 +347,12 @@ func (w *NotificationWorker) processJob(workerID int, job *NotificationJob) {
 		"retries":        job.Retries,
 	})
 
+	// FINAL authoritative pause gate — held before any provider work.
+	if w.deliveryControl != nil && w.deliveryControl.IsPaused(ctx) {
+		w.holdForPause(ctx, notification, "initial_send")
+		return
+	}
+
 	// Update status to sending
 	if err := w.notifRepo.UpdateStatus(ctx, notification.ID, models.NotificationStatusSending); err != nil {
 		w.logger.Error(logging.General, logging.Update, "Failed to update notification status", map[logging.ExtraKey]interface{}{
@@ -273,6 +382,11 @@ func (w *NotificationWorker) processJob(workerID int, job *NotificationJob) {
 	processingTime := int(time.Since(startTime).Milliseconds())
 
 	if err != nil {
+		// Pause control errors are NOT provider failures: hold + preserve retry.
+		if errors.Is(err, ErrDeliveryPaused) {
+			w.holdForPause(ctx, notification, "provider_boundary_gate")
+			return
+		}
 		w.handleFailure(ctx, notification, job, err, processingTime)
 	} else {
 		w.handleSuccess(ctx, notification, providerMsgID, processingTime)
@@ -296,8 +410,33 @@ func (w *NotificationWorker) handleSuccess(ctx context.Context, notification *mo
 		})
 	}
 
+	// Persist which provider handled this notification (set by the adapter).
+	if err := w.notifRepo.SetProvider(ctx, notification.ID, notification.Provider); err != nil {
+		w.logger.Debug(logging.General, logging.Update, "Failed to persist notification provider", map[logging.ExtraKey]interface{}{
+			"notificationId": notification.ID,
+			"provider":       notification.Provider,
+			"error":          err.Error(),
+		})
+	}
+
 	// Create success log
 	w.createLog(ctx, notification.ID, "sent", models.NotificationStatusSent, "Notification sent successfully", "")
+}
+
+// holdForPause marks a delivery as held by the global pause WITHOUT consuming
+// its retry budget, and records a "held" log entry.
+func (w *NotificationWorker) holdForPause(ctx context.Context, notification *models.Notification, reason string) {
+	w.logger.Info(logging.Internal, logging.Api, "Holding notification for global delivery pause", map[logging.ExtraKey]interface{}{
+		"notificationId": notification.ID,
+		"reason":        reason,
+	})
+	if err := w.deliveryControl.HoldNotification(ctx, notification.ID, reason); err != nil {
+		w.logger.Error(logging.General, logging.Update, "Failed to hold notification for pause", map[logging.ExtraKey]interface{}{
+			"notificationId": notification.ID,
+			"error":          err.Error(),
+		})
+	}
+	w.createLog(ctx, notification.ID, "held", models.NotificationStatusHeld, "Held by global outbound delivery pause", "")
 }
 
 // handleFailure handles failed notification sending with retry logic
@@ -312,6 +451,16 @@ func (w *NotificationWorker) handleFailure(ctx context.Context, notification *mo
 		"retryCount":     notification.RetryCount,
 		"maxRetries":     notification.MaxRetries,
 	})
+
+	// Persist which provider failed this notification (set by the adapter) so
+	// per-provider stats include failures, not just successes.
+	if err := w.notifRepo.SetProvider(ctx, notification.ID, notification.Provider); err != nil {
+		w.logger.Debug(logging.General, logging.Update, "Failed to persist notification provider (failure)", map[logging.ExtraKey]interface{}{
+			"notificationId": notification.ID,
+			"provider":       notification.Provider,
+			"error":          err.Error(),
+		})
+	}
 
 	// Check if we should retry
 	if notification.RetryCount < notification.MaxRetries {
@@ -404,6 +553,18 @@ func (w *NotificationWorker) processRetries() {
 
 	w.logger.Debug(logging.Internal, logging.Api, "Processing retries", nil)
 
+	// Retries are frozen while the global pause is active: hold them instead
+	// of executing, preserving their retry budget.
+	if w.deliveryControl != nil && w.deliveryControl.IsPaused(ctx) {
+		notifications, err := w.notifRepo.GetRetryableNotifications(ctx, 100)
+		if err == nil {
+			for _, n := range notifications {
+				w.holdForPause(ctx, n, "retry")
+			}
+		}
+		return
+	}
+
 	// Fetch retryable notifications
 	notifications, err := w.notifRepo.GetRetryableNotifications(ctx, 100)
 	if err != nil {
@@ -462,6 +623,18 @@ func (w *NotificationWorker) pendingPoller() {
 // processPending fetches pending notifications from DB and enqueues them
 func (w *NotificationWorker) processPending() {
 	ctx := context.Background()
+
+	// New/scheduled deliveries are held while the global pause is active —
+	// accepted, persisted, but never reaching a provider.
+	if w.deliveryControl != nil && w.deliveryControl.IsPaused(ctx) {
+		notifications, err := w.notifRepo.GetPendingNotifications(ctx, w.config.Worker.QueueSize)
+		if err == nil {
+			for _, n := range notifications {
+				w.holdForPause(ctx, n, "scheduled_or_initial")
+			}
+		}
+		return
+	}
 
 	notifications, err := w.notifRepo.GetPendingNotifications(ctx, w.config.Worker.QueueSize)
 	if err != nil {
@@ -544,6 +717,71 @@ func (w *NotificationWorker) digestProcessor() {
 		case <-w.ctx.Done():
 			w.logger.Debug(logging.General, logging.Startup, "Digest processor shutting down", nil)
 			return
+		}
+	}
+}
+
+// attemptCleanupProcessor periodically purges expired provider attempt bodies
+// and hard-deletes expired attempt rows per the configured retention policy.
+// Cleanup is observable via logs and never touches notification records.
+//
+// NOTE: This is the LEGACY hardcoded cleanup path controlled by env vars
+// (PROVIDER_LOGS_*). When a retention policy is enabled through the admin API
+// for the "provider_attempts" category, the unified RetentionScheduler takes
+// over and this legacy processor should be disabled (set PROVIDER_LOGS_ENABLED=false)
+// to avoid both systems running concurrently on the same table.
+func (w *NotificationWorker) attemptCleanupProcessor() {
+	defer w.wg.Done()
+
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	w.logger.Debug(logging.General, logging.Startup, "Provider attempt retention cleanup started", nil)
+
+	for {
+		select {
+		case <-ticker.C:
+			w.processAttemptCleanup()
+		case <-w.ctx.Done():
+			w.logger.Debug(logging.General, logging.Startup, "Provider attempt cleanup shutting down", nil)
+			return
+		}
+	}
+}
+
+// processAttemptCleanup applies body + metadata retention for attempt logs.
+func (w *NotificationWorker) processAttemptCleanup() {
+	ctx := context.Background()
+	cfg := w.config.ProviderLogs
+	if !cfg.Enabled {
+		return
+	}
+
+	bodyRetention := time.Duration(cfg.BodyRetentionDays) * 24 * time.Hour
+	if bodyRetention > 0 {
+		purged, err := w.attemptRepo.PurgeBodies(ctx, time.Now().Add(-bodyRetention))
+		if err != nil {
+			w.logger.Warn(logging.General, logging.Update, "Failed to purge expired attempt bodies", map[logging.ExtraKey]interface{}{
+				logging.ExtraKey("error"): err.Error(),
+			})
+		} else if purged > 0 {
+			w.logger.Info(logging.General, logging.Update, "Purged expired provider attempt bodies", map[logging.ExtraKey]interface{}{
+				logging.ExtraKey("count"): purged,
+			})
+		}
+	}
+
+	metaRetention := time.Duration(cfg.MetadataRetentionDays) * 24 * time.Hour
+	if metaRetention > 0 {
+		deleted, err := w.attemptRepo.DeleteExpired(ctx, time.Now().Add(-metaRetention))
+		if err != nil {
+			w.logger.Warn(logging.General, logging.Update, "Failed to delete expired provider attempts", map[logging.ExtraKey]interface{}{
+				logging.ExtraKey("error"): err.Error(),
+			})
+		} else if deleted > 0 {
+			w.logger.Info(logging.General, logging.Update, "Deleted expired provider attempts", map[logging.ExtraKey]interface{}{
+				logging.ExtraKey("count"): deleted,
+			})
 		}
 	}
 }

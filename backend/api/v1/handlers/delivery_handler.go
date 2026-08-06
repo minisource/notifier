@@ -38,19 +38,24 @@ func (h *DeliveryHandler) notificationToDeliveryResponse(n *models.Notification)
 	}
 
 	return &dto.DeliveryResponse{
-		ID:               n.ID,
-		NotificationID:   n.ID,
-		Provider:         n.Provider,
-		Channel:          string(n.Type),
-		Status:           status,
-		AttemptCount:     n.RetryCount,
-		MaxAttempts:      n.MaxRetries,
-		LastErrorCode:    "",
-		LastErrorMessage: n.ErrorMessage,
-		NextRetryAt:      n.NextRetryAt,
-		CreatedAt:        n.CreatedAt,
-		UpdatedAt:        n.UpdatedAt,
-		CompletedAt:      n.SentAt,
+		ID:                n.ID,
+		NotificationID:    n.ID,
+		Provider:          n.Provider,
+		Channel:           string(n.Type),
+		Status:            status,
+		AttemptCount:      n.RetryCount,
+		MaxAttempts:       n.MaxRetries,
+		LastErrorCode:     "",
+		LastErrorMessage:  n.ErrorMessage,
+		NextRetryAt:       n.NextRetryAt,
+		RecipientEmail:    n.RecipientEmail,
+		RecipientPhone:    n.RecipientPhone,
+		RecipientID:       n.RecipientID,
+		Subject:           n.Subject,
+		Body:              n.Body,
+		CreatedAt:         n.CreatedAt,
+		UpdatedAt:         n.UpdatedAt,
+		CompletedAt:       n.SentAt,
 	}
 }
 
@@ -202,6 +207,7 @@ func (h *DeliveryHandler) GetDelivery(c *fiber.Ctx) error {
 			attempts = append(attempts, h.logToAttempt(log, i+1))
 		}
 		delivery.Attempts = attempts
+		delivery.AttemptCount = len(attempts)
 	}
 
 	return response.OK(c, delivery)

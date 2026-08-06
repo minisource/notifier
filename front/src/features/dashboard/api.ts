@@ -6,7 +6,7 @@ import type { DashboardOverview } from '@/features/notifier/api/notifier-types';
 /**
  * The backend wraps all responses in { success: true, data: { ... } }.
  * This helper unwraps the data field, falling back to the raw response
- * if the envelope is not present (e.g., mock mode returns data directly).
+ * if the envelope is not present.
  */
 function unwrapResponse<T>(response: unknown): T {
   if (

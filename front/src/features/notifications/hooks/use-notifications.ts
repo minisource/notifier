@@ -1,9 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { toast } from '@minisource/ui';
 import { notificationsKeys } from '../query-keys';
 import {
   listNotifications, getNotification, sendNotification,
-  sendBatchNotifications, retryNotification, cancelNotification,
+  sendBatchNotifications, retryNotification, retryNotifications, retryAllFailed, cancelNotification,
   markNotificationRead, markAllNotificationsRead,
   getNotificationDeliveries, getTemplatesForSelect,
 } from '../api';
@@ -47,15 +47,11 @@ export function useSendNotification() {
     mutationFn: (input: SendNotificationInput) => sendNotification(input),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: notificationsKeys.lists() });
-      toast.success('Notification sent', {
-        description: `ID: ${result.id.slice(0, 8)}...`,
-      });
+      toast.success('Notification sent', `ID: ${result.id.slice(0, 8)}...`);
     },
     onError: (error) => {
       if (error instanceof ApiError) {
-        toast.error(error.message, {
-          description: error.details ? JSON.stringify(error.details) : `Code: ${error.code}`,
-        });
+        toast.error(error.message, error.details ? JSON.stringify(error.details) : `Code: ${error.code}`);
       } else {
         toast.error('Failed to send notification');
       }
@@ -69,9 +65,7 @@ export function useSendBatchNotifications() {
     mutationFn: (input: SendBatchNotificationInput) => sendBatchNotifications(input),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: notificationsKeys.lists() });
-      toast.success('Batch sent', {
-        description: `${result.length} notifications queued`,
-      });
+      toast.success('Batch sent', `${result.length} notifications queued`);
     },
     onError: () => {
       toast.error('Batch send failed');
@@ -86,12 +80,40 @@ export function useRetryNotification() {
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: notificationsKeys.lists() });
       queryClient.invalidateQueries({ queryKey: notificationsKeys.detail(id) });
-      toast.success('Retry initiated', {
-        description: 'Notification has been requeued',
-      });
+      toast.success('Retry initiated', 'Notification has been requeued');
     },
     onError: () => {
       toast.error('Retry failed');
+    },
+  });
+}
+
+export function useRetryNotifications() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => retryNotifications(ids),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: notificationsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: notificationsKeys.details() });
+      toast.success('Retry initiated', `${result.retried} notification(s) requeued`);
+    },
+    onError: () => {
+      toast.error('Bulk retry failed');
+    },
+  });
+}
+
+export function useRetryAllFailed() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => retryAllFailed(),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: notificationsKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: notificationsKeys.details() });
+      toast.success('Retry all failed', `${result.retried} notification(s) requeued`);
+    },
+    onError: () => {
+      toast.error('Retry all failed');
     },
   });
 }

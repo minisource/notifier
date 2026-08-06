@@ -1,8 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { BarChart3 } from 'lucide-react';
-import { SectionCard } from '@/components/shared/section-card';
+import { Card, CardContent, CardHeader, CardTitle } from '@minisource/ui';
 import { ChannelBadge } from '@/components/shared/channel-badge';
 import { MiniProgress } from '@/components/shared/mini-progress';
 
@@ -22,7 +21,7 @@ export function ChannelBreakdownPanel({ breakdown }: ChannelBreakdownPanelProps)
   ];
 
   return (
-    <SectionCard title={t('dashboard.channel_breakdown')} icon={BarChart3}>
+    <Card><CardHeader><CardTitle>{t('dashboard.channel_breakdown')}</CardTitle></CardHeader><CardContent>
       <div className="space-y-3">
         {channels.map(ch => {
           const count = breakdown[ch.key] || 0;
@@ -43,6 +42,6 @@ export function ChannelBreakdownPanel({ breakdown }: ChannelBreakdownPanelProps)
           );
         })}
       </div>
-    </SectionCard>
+    </CardContent></Card>
   );
 }

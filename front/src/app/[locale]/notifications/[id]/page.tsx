@@ -2,19 +2,18 @@
 
 import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
-import { PageHeader } from '@/components/shared/page-header';
-import { PageContainer } from '@/components/shared/page-container';
-import { SectionCard } from '@/components/shared/section-card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@minisource/ui';
+import { Card, CardContent, CardHeader, CardTitle } from '@minisource/ui';
+import { Button } from '@minisource/ui';
+import { Badge } from '@minisource/ui';
 import { NotificationSummaryCard } from '@/features/notifications/components/notification-summary-card';
 import { NotificationTimeline } from '@/features/notifications/components/notification-timeline';
 import { NotificationAttemptsList } from '@/features/notifications/components/notification-attempts-list';
 import { NotificationMetadataViewer } from '@/features/notifications/components/notification-metadata-viewer';
 import { useNotification, useNotificationDeliveries, useRetryNotification, useCancelNotification, useMarkNotificationRead } from '@/features/notifications/hooks/use-notifications';
-import { PageSkeleton } from '@/components/shared/loading-state';
-import { ErrorState } from '@/components/shared/error-state';
-import { ArrowLeft, Clock, Truck, Layers, Shield, ExternalLink } from 'lucide-react';
+import { Skeleton } from '@minisource/ui';
+import { ErrorState } from '@minisource/ui';
+import { ArrowLeft } from 'lucide-react';
 import { maskEmail, maskPhone, shortId } from '@/lib/utils/format';
 import { formatDateTime } from '@/lib/utils/date';
 
@@ -22,7 +21,7 @@ export default function NotificationDetailPage() {
   const t = useTranslations();
   const params = useParams();
   const router = useRouter();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
   const id = params?.id as string;
 
   const { data: notification, isLoading, isError, error, refetch } = useNotification(id);
@@ -34,23 +33,23 @@ export default function NotificationDetailPage() {
 
   if (isLoading) {
     return (
-      <PageContainer>
+      <div className="space-y-6">
         <PageHeader title={t('notifications.detail_title')}>
-          <Button variant="ghost" onClick={() => router.push(`/${locale}/notifications`)} disabled>
+          <Button variant="ghost" onClick={() => router.push(`/notifications`)} disabled>
             <ArrowLeft className="ml-2 h-4 w-4" />
             {t('common.back')}
           </Button>
         </PageHeader>
-        <PageSkeleton context="notifications" layout="detail" />
-      </PageContainer>
+        <Skeleton className="h-64 w-full" />
+      </div>
     );
   }
 
   if (isError || !notification) {
     return (
-      <PageContainer>
+      <div className="space-y-6">
         <PageHeader title={t('notifications.detail_title')}>
-          <Button variant="ghost" onClick={() => router.push(`/${locale}/notifications`)}>
+          <Button variant="ghost" onClick={() => router.push(`/notifications`)}>
             <ArrowLeft className="ml-2 h-4 w-4" />
             {t('common.back')}
           </Button>
@@ -60,17 +59,17 @@ export default function NotificationDetailPage() {
           message={(error as Error)?.message || t('notifications.detail.not_found')}
           onRetry={() => refetch()}
         />
-      </PageContainer>
+      </div>
     );
   }
 
   return (
-    <PageContainer>
+    <div className="space-y-6">
       <PageHeader
         title={notification.subject || t('notifications.detail_title')}
-        subtitle={`${shortId(notification.id)} · ${formatDateTime(notification.createdAt, locale)}`}
+        description={`${shortId(notification.id)} · ${formatDateTime(notification.createdAt, locale)}`}
       >
-        <Button variant="ghost" size="sm" onClick={() => router.push(`/${locale}/notifications`)}>
+        <Button variant="ghost" size="sm" onClick={() => router.push(`/notifications`)}>
           <ArrowLeft className="ml-1.5 h-4 w-4" />
           {t('common.back')}
         </Button>
@@ -91,7 +90,7 @@ export default function NotificationDetailPage() {
         {/* Detail Grid */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Recipient Info */}
-          <SectionCard title={t('notifications.recipient')} icon={ExternalLink}>
+          <Card><CardHeader><CardTitle>{t('notifications.recipient')}</CardTitle></CardHeader><CardContent>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">{t('notifications.list.notification')} ID</span>
@@ -122,10 +121,10 @@ export default function NotificationDetailPage() {
                 </Badge>
               </div>
             </div>
-          </SectionCard>
+          </CardContent></Card>
 
           {/* Message Content */}
-          <SectionCard title={t('notifications.form.content_section')} icon={Layers}>
+          <Card><CardHeader><CardTitle>{t('notifications.form.content_section')}</CardTitle></CardHeader><CardContent>
             <div className="space-y-3 text-sm">
               {notification.subject && (
                 <div>
@@ -150,29 +149,29 @@ export default function NotificationDetailPage() {
                 </div>
               )}
             </div>
-          </SectionCard>
+          </CardContent></Card>
         </div>
 
         {/* Timeline */}
-        <SectionCard title={t('notifications.timeline')} icon={Clock}>
+        <Card><CardHeader><CardTitle>{t('notifications.timeline')}</CardTitle></CardHeader><CardContent>
           <NotificationTimeline notification={notification} />
-        </SectionCard>
+        </CardContent></Card>
 
         {/* Delivery Attempts */}
-        <SectionCard title={t('notifications.delivery_attempts')} icon={Truck}>
+        <Card><CardHeader><CardTitle>{t('notifications.delivery_attempts')}</CardTitle></CardHeader><CardContent>
           <NotificationAttemptsList
             deliveries={deliveries || []}
             loading={deliveriesLoading}
           />
-        </SectionCard>
+        </CardContent></Card>
 
         {/* Metadata */}
         {notification.metadata && Object.keys(notification.metadata).length > 0 && (
-          <SectionCard title={t('notifications.metadata')} icon={Shield}>
+          <Card><CardHeader><CardTitle>{t('notifications.metadata')}</CardTitle></CardHeader><CardContent>
             <NotificationMetadataViewer metadata={notification.metadata} />
-          </SectionCard>
+          </CardContent></Card>
         )}
       </div>
-    </PageContainer>
+    </div>
   );
 }

@@ -73,7 +73,7 @@ type Provider interface {
 	// Channel returns the notification channel this provider handles
 	Channel() Channel
 
-	// Name returns the provider name (e.g., "kavenegar", "smtp", "mock")
+	// Name returns the provider name (e.g., "kavenegar", "smtp")
 	Name() string
 
 	// Send delivers a message through this provider

@@ -1,14 +1,14 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { Button } from '@minisource/ui';
 import { Languages } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from '@minisource/ui';
+import { useParams } from 'next/navigation';
 
 const languages = [
   { code: 'fa', label: 'فارسی' },
@@ -17,13 +17,14 @@ const languages = [
 
 export function LanguageSwitcher() {
   const params = useParams();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
 
+  // URLs are locale-free (localePrefix: 'never'), so switching the language
+  // only flips the NEXT_LOCALE cookie that next-intl's middleware reads.
   const switchLanguage = (newLocale: string) => {
     if (newLocale === locale) return;
-    const pathname = window.location.pathname;
-    const newPath = pathname.replace(`/${locale}`, `/${newLocale}`);
-    window.location.href = newPath;
+    document.cookie = `NEXT_LOCALE=${newLocale}; path=/; max-age=31536000; samesite=lax`;
+    window.location.reload();
   };
 
   return (

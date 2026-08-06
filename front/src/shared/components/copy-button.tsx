@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Copy, Check } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@minisource/ui';
 import { cn } from '@/lib/utils';
 
 interface CopyButtonProps {

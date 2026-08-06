@@ -99,6 +99,36 @@ func (h *AdminHandler) RetryNotification(c *fiber.Ctx) error {
 	return (&NotificationHandler{service: h.notificationService}).RetryNotification(c)
 }
 
+// BulkRetryNotifications godoc
+// @Summary Admin: Bulk retry notifications
+// @Description Retry multiple failed/dead notifications by ID (admin only). Each is re-queued for exactly one more attempt.
+// @Tags Admin Notifications
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body dto.BulkRetryNotificationsRequest true "Notification IDs"
+// @Success 200 {object} dto.BulkRetryNotificationsResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 403 {object} dto.ErrorResponse
+// @Router /admin/notifications/retry [post]
+func (h *AdminHandler) BulkRetryNotifications(c *fiber.Ctx) error {
+	return (&NotificationHandler{service: h.notificationService}).BulkRetryNotifications(c)
+}
+
+// RetryAllFailed godoc
+// @Summary Admin: Retry all failed notifications
+// @Description Re-queue every failed and dead-letter notification for one more attempt each (admin only).
+// @Tags Admin Notifications
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dto.RetryAllFailedResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /admin/notifications/retry-failed [post]
+func (h *AdminHandler) RetryAllFailed(c *fiber.Ctx) error {
+	return (&NotificationHandler{service: h.notificationService}).RetryAllFailed(c)
+}
+
 // CreateNotification godoc
 // @Summary Admin: Create notification
 // @Description Create a new notification (admin only).\nCanonical format: {\"channel\":\"sms\",\"recipient\":{\"phone\":\"+989...\"},\"body\":\"...\"}

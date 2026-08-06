@@ -9,6 +9,9 @@ import (
 	"github.com/minisource/go-common/logging"
 	"github.com/minisource/notifier/internal/platform/email"
 	"github.com/minisource/notifier/internal/repository"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // ProviderRegistry manages available providers and provides selection logic
@@ -106,7 +109,30 @@ func (r *ProviderRegistry) SendViaDefault(ctx context.Context, msg *Message) (*S
 	if err != nil {
 		return nil, err
 	}
-	return provider.Send(ctx, msg)
+	return sendWithSpan(ctx, provider, channel, msg)
+}
+
+// sendWithSpan wraps the provider dispatch in a span with safe business
+// attributes only. Never include recipient addresses, message bodies,
+// credentials, OTPs, or provider secrets.
+func sendWithSpan(ctx context.Context, p Provider, channel Channel, msg *Message) (*SendResult, error) {
+	_, span := otel.Tracer("notifier-service").Start(ctx, "notification.provider.send")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("notification.channel", string(channel)),
+		attribute.String("notification.provider", p.Name()),
+		attribute.String("notification.operation", "send"),
+	)
+
+	result, err := p.Send(ctx, msg)
+	if err != nil {
+		span.SetAttributes(attribute.String("notification.result", "failed"))
+		span.SetStatus(codes.Error, "provider send failed")
+	} else {
+		span.SetAttributes(attribute.String("notification.result", "success"))
+		span.SetStatus(codes.Ok, "")
+	}
+	return result, err
 }
 
 // ChannelFromMessage determines the channel from a message's metadata or content
@@ -121,16 +147,9 @@ func ChannelFromMessage(msg *Message) Channel {
 	return ""
 }
 
-// BuildDefaultRegistry creates a registry with mock providers for all channels
+// BuildDefaultRegistry creates a registry with the built-in providers.
 func BuildDefaultRegistry(logger logging.Logger, notifRepo repository.NotificationRepository) *ProviderRegistry {
 	registry := NewProviderRegistry(logger)
-
-	// Register mock providers for all channels
-	for _, ch := range AllChannels() {
-		mock := NewMockProvider(ch)
-		registry.Register(mock)
-		registry.SetDefault(ch, mock.Name())
-	}
 
 	// Register in-app provider
 	inapp := NewInAppProvider(notifRepo, logger)
@@ -151,7 +170,7 @@ func (r *ProviderRegistry) ConfigureFromDatabase(ctx context.Context, settingRep
 func (r *ProviderRegistry) loadSMSProvider(ctx context.Context, settingRepo repository.SettingRepository) {
 	setting, err := settingRepo.GetByKey(ctx, "sms.providers")
 	if err != nil {
-		r.logger.Warn(logging.General, logging.Select, "No SMS provider config in database, using mock", nil)
+		r.logger.Warn(logging.General, logging.Select, "No SMS provider config in database; SMS sends will fail until one is configured", nil)
 		return
 	}
 
@@ -173,7 +192,7 @@ func (r *ProviderRegistry) loadSMSProvider(ctx context.Context, settingRepo repo
 func (r *ProviderRegistry) loadEmailProvider(ctx context.Context, settingRepo repository.SettingRepository) {
 	setting, err := settingRepo.GetByKey(ctx, "email.providers")
 	if err != nil {
-		r.logger.Warn(logging.General, logging.Select, "No email provider config in database, using mock", nil)
+		r.logger.Warn(logging.General, logging.Select, "No email provider config in database; email sends will fail until one is configured", nil)
 		return
 	}
 
@@ -203,7 +222,7 @@ func (r *ProviderRegistry) loadEmailProvider(ctx context.Context, settingRepo re
 func (r *ProviderRegistry) loadPushProvider(ctx context.Context, settingRepo repository.SettingRepository) {
 	setting, err := settingRepo.GetByKey(ctx, "push.providers")
 	if err != nil {
-		r.logger.Warn(logging.General, logging.Select, "No push provider config in database, using mock", nil)
+		r.logger.Warn(logging.General, logging.Select, "No push provider config in database; push sends will fail until one is configured", nil)
 		return
 	}
 

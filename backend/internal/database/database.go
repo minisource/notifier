@@ -8,6 +8,7 @@ import (
 	"github.com/minisource/go-common/logging"
 	"github.com/minisource/notifier/config"
 	"github.com/minisource/notifier/internal/models"
+	"github.com/minisource/notifier/internal/retention"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
@@ -118,6 +119,7 @@ func RunMigrations(db *gorm.DB, runSeedData bool, autoMigrate bool, logger loggi
 		logger.Info(logging.Postgres, logging.Startup, "GORM AutoMigrate is ENABLED (development mode)", nil)
 
 		models := []interface{}{
+			&models.Tenant{},
 			&models.NotificationTemplate{},
 			&models.NotificationPreference{},
 			&models.Notification{},
@@ -127,6 +129,16 @@ func RunMigrations(db *gorm.DB, runSeedData bool, autoMigrate bool, logger loggi
 			&models.SMSTemplate{},
 			&models.Provider{},
 			&models.Reminder{},
+			&models.ProviderAttempt{},
+			&models.ProviderAttemptEvent{},
+			&models.ProviderBalanceSnapshot{},
+			&models.ProviderAccountHealth{},
+			&models.ProviderCreditAlert{},
+			&models.DeliveryControlState{},
+			&models.DeliveryControlEvent{},
+			&models.DeliveryControlIdempotency{},
+			&retention.PolicyModel{},
+			&retention.RunRecord{},
 		}
 
 		for _, model := range models {
@@ -179,8 +191,30 @@ func createIndexes(db *gorm.DB, logger logging.Logger) error {
 		"CREATE INDEX IF NOT EXISTS idx_notifications_status_priority ON notifications(status, priority DESC, created_at ASC)",
 		"CREATE INDEX IF NOT EXISTS idx_notifications_scheduled ON notifications(scheduled_at) WHERE scheduled_at IS NOT NULL",
 		"CREATE INDEX IF NOT EXISTS idx_notifications_retry ON notifications(status, retry_count, next_retry_at) WHERE status = 'retrying'",
+		"CREATE INDEX IF NOT EXISTS idx_notifications_held ON notifications(status, held_at) WHERE status = 'held'",
 		"CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read_at) WHERE read_at IS NULL",
 		"CREATE INDEX IF NOT EXISTS idx_notification_logs_created ON notification_logs(notification_id, created_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_attempts_notification ON notification_provider_attempts(notification_id)",
+		"CREATE INDEX IF NOT EXISTS idx_attempts_tenant_created ON notification_provider_attempts(tenant_id, created_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_attempts_provider_created ON notification_provider_attempts(provider, created_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_attempts_channel_created ON notification_provider_attempts(channel, created_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_attempts_status_created ON notification_provider_attempts(status, created_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_attempts_provider_msg_id ON notification_provider_attempts(provider_message_id)",
+		"CREATE INDEX IF NOT EXISTS idx_attempts_correlation ON notification_provider_attempts(correlation_id)",
+		"CREATE INDEX IF NOT EXISTS idx_attempts_request_id ON notification_provider_attempts(request_id)",
+		"CREATE INDEX IF NOT EXISTS idx_attempts_duration ON notification_provider_attempts(duration_ms)",
+		"CREATE INDEX IF NOT EXISTS idx_attempts_created ON notification_provider_attempts(created_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_attempts_parent ON notification_provider_attempts(parent_attempt_id)",
+		"CREATE INDEX IF NOT EXISTS idx_attempt_events_attempt ON notification_provider_attempt_events(attempt_id, occurred_at ASC)",
+		"CREATE INDEX IF NOT EXISTS idx_attempt_events_occurred ON notification_provider_attempt_events(occurred_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_balance_provider_fetched ON provider_balance_snapshots(provider_id, fetched_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_balance_provider_created ON provider_balance_snapshots(provider_id, created_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_balance_provider_tenant ON provider_balance_snapshots(tenant_id, created_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_balance_health_provider ON provider_account_health(provider_id)",
+		"CREATE INDEX IF NOT EXISTS idx_credit_alerts_provider_status ON provider_credit_alerts(provider_id, status, created_at DESC)",
+		"CREATE INDEX IF NOT EXISTS idx_credit_alerts_type_status ON provider_credit_alerts(alert_type, status)",
+		"CREATE INDEX IF NOT EXISTS idx_dc_idempotency_actor_key ON delivery_control_idempotency(actor, idempotency_key)",
+		"CREATE INDEX IF NOT EXISTS idx_dc_idempotency_expires ON delivery_control_idempotency(expires_at)",
 	}
 
 	for _, indexSQL := range indexes {
@@ -230,20 +264,58 @@ func seedDefaultData(db *gorm.DB, logger logging.Logger) error {
 			Variables:   "[]",
 			IsActive:    true,
 		},
+		{
+			Key:               "verify",
+			Name:              "verify",
+			Type:              "sms",
+			Subject:           "",
+			Body:              "Your verification code is: {{code}}",
+			Description:       "OTP verification SMS template",
+			Variables:         "[\"code\"]",
+			ProviderTemplates: `[{"provider":"kavenegar","templateKey":"verify"}]`,
+			Locale:            "en",
+			IsActive:          true,
+		},
 	}
 
 	for _, template := range templates {
 		var existing models.NotificationTemplate
-		if err := db.Where("name = ?", template.Name).First(&existing).Error; err != nil {
+		if err := db.Where("name = ? AND type = ?", template.Name, template.Type).First(&existing).Error; err != nil {
 			if err := db.Create(&template).Error; err != nil {
-				logger.Debug(logging.Postgres, logging.Startup, "Template already exists", map[logging.ExtraKey]interface{}{
+				logger.Debug(logging.Postgres, logging.Startup, "Failed to create template", map[logging.ExtraKey]interface{}{
 					"template": template.Name,
+					"error":    err.Error(),
 				})
 			} else {
 				logger.Info(logging.Postgres, logging.Startup, "Created template", map[logging.ExtraKey]interface{}{
 					"template": template.Name,
 				})
 			}
+		}
+	}
+
+	// Seed the default/global tenant (used when no X-Tenant-ID is provided)
+	var tenantCount int64
+	db.Model(&models.Tenant{}).Count(&tenantCount)
+	if tenantCount == 0 {
+		defaultTenant := models.Tenant{
+			Name:            "Default",
+			Slug:            "default",
+			DisplayName:     "Default Tenant",
+			Description:     "Default/global tenant for notifications",
+			IsActive:        true,
+			IsDefault:       true,
+			EnabledChannels: []string{"email", "sms", "push", "in_app", "webhook"},
+		}
+		if err := db.Create(&defaultTenant).Error; err != nil {
+			logger.Debug(logging.Postgres, logging.Startup, "Failed to seed default tenant", map[logging.ExtraKey]interface{}{
+				"error": err.Error(),
+			})
+		} else {
+			logger.Info(logging.Postgres, logging.Startup, "Seeded default tenant", map[logging.ExtraKey]interface{}{
+				"id":   defaultTenant.ID.String(),
+				"slug": defaultTenant.Slug,
+			})
 		}
 	}
 
@@ -286,7 +358,8 @@ func seedDefaultData(db *gorm.DB, logger logging.Logger) error {
 	}
 
 	// Seed SMS provider configuration
-	// Use Kavenegar if configured, otherwise use mock provider
+	// Only configured when a real provider (Kavenegar) is enabled — no mock
+	// providers are ever seeded.
 	cfg := config.GetConfig()
 	var smsProviderConfig string
 	var smsProviderDesc string
@@ -300,102 +373,51 @@ func seedDefaultData(db *gorm.DB, logger logging.Logger) error {
 			"template": cfg.Kavenegar.Template,
 		})
 	} else {
-		// Use mock provider for development
-		smsProviderConfig = `{"provider":"mock","apiKey":"dev-mock-key","template":"Your OTP code is: %s"}`
-		smsProviderDesc = "SMS provider configuration (mock for development)"
-		logger.Info(logging.Postgres, logging.Startup, "Using mock SMS provider (set KAVENEGAR_ENABLED=true to use Kavenegar)", nil)
+		logger.Info(logging.Postgres, logging.Startup, "SMS provider not configured; set KAVENEGAR_ENABLED=true and KAVENEGAR_API_KEY to enable SMS sends", nil)
 	}
 
-	smsSettings := []models.Setting{
-		{
-			Key:         models.SettingKeySMSProviders,
-			Value:       smsProviderConfig,
-			Category:    "sms",
-			Description: smsProviderDesc,
-			IsActive:    true,
-			IsEncrypted: false,
-		},
-	}
+	if smsProviderConfig != "" {
+		smsSettings := []models.Setting{
+			{
+				Key:         models.SettingKeySMSProviders,
+				Value:       smsProviderConfig,
+				Category:    "sms",
+				Description: smsProviderDesc,
+				IsActive:    true,
+				IsEncrypted: false,
+			},
+		}
 
-	for _, setting := range smsSettings {
-		var existing models.Setting
-		if err := db.Where("key = ?", setting.Key).First(&existing).Error; err != nil {
-			if err := db.Create(&setting).Error; err != nil {
-				logger.Debug(logging.Postgres, logging.Startup, "SMS setting already exists", map[logging.ExtraKey]interface{}{
-					"key": setting.Key,
-				})
-			} else {
-				logger.Info(logging.Postgres, logging.Startup, "Created SMS setting", map[logging.ExtraKey]interface{}{
-					"key":      setting.Key,
-					"provider": cfg.Kavenegar.Enabled,
-				})
-			}
-		} else {
-			// Update existing setting if provider changed
-			if existing.Value != smsProviderConfig {
-				existing.Value = smsProviderConfig
-				existing.Description = smsProviderDesc
-				if err := db.Save(&existing).Error; err != nil {
-					logger.Warn(logging.Postgres, logging.Startup, "Failed to update SMS setting", map[logging.ExtraKey]interface{}{
-						"key":   setting.Key,
-						"error": err.Error(),
-					})
-				} else {
-					logger.Info(logging.Postgres, logging.Startup, "Updated SMS setting", map[logging.ExtraKey]interface{}{
+		for _, setting := range smsSettings {
+			var existing models.Setting
+			if err := db.Where("key = ?", setting.Key).First(&existing).Error; err != nil {
+				if err := db.Create(&setting).Error; err != nil {
+					logger.Debug(logging.Postgres, logging.Startup, "SMS setting already exists", map[logging.ExtraKey]interface{}{
 						"key": setting.Key,
 					})
+				} else {
+					logger.Info(logging.Postgres, logging.Startup, "Created SMS setting", map[logging.ExtraKey]interface{}{
+						"key":      setting.Key,
+						"provider": cfg.Kavenegar.Enabled,
+					})
+				}
+			} else {
+				// Update existing setting if provider changed
+				if existing.Value != smsProviderConfig {
+					existing.Value = smsProviderConfig
+					existing.Description = smsProviderDesc
+					if err := db.Save(&existing).Error; err != nil {
+						logger.Warn(logging.Postgres, logging.Startup, "Failed to update SMS setting", map[logging.ExtraKey]interface{}{
+							"key":   setting.Key,
+							"error": err.Error(),
+						})
+					} else {
+						logger.Info(logging.Postgres, logging.Startup, "Updated SMS setting", map[logging.ExtraKey]interface{}{
+							"key": setting.Key,
+						})
+					}
 				}
 			}
-		}
-	}
-
-	// Seed default providers for development/testing
-	defaultProviders := []models.Provider{
-		{
-			Name:        "Mock SMS",
-			Channel:     "sms",
-			Type:        "mock-sms",
-			Status:      models.ProviderStatusActive,
-			Config:      `{"sender":"10008663","baseUrl":"https://api.mock-sms.local"}`,
-			SecretConfig: `{"apiKey":"mock-sms-dev-key-12345"}`,
-			Priority:    10,
-			IsEnabled:   true,
-			IsDefault:   true,
-			IsPrimary:   true,
-			Description: "Mock SMS provider for development and testing",
-		},
-		{
-			Name:        "Mock Email",
-			Channel:     "email",
-			Type:        "mock-email",
-			Status:      models.ProviderStatusActive,
-			Config:      `{"fromAddress":"noreply@mock-email.local","fromName":"Notifier Dev"}`,
-			SecretConfig: `{"apiKey":"mock-email-dev-key-12345"}`,
-			Priority:    10,
-			IsEnabled:   true,
-			IsDefault:   true,
-			IsPrimary:   true,
-			Description: "Mock Email provider for development and testing",
-		},
-	}
-
-	for _, provider := range defaultProviders {
-		var existing models.Provider
-		if err := db.Where("name = ?", provider.Name).First(&existing).Error; err != nil {
-			if err := db.Create(&provider).Error; err != nil {
-				logger.Debug(logging.Postgres, logging.Startup, "Provider already exists", map[logging.ExtraKey]interface{}{
-					"name": provider.Name,
-				})
-			} else {
-				logger.Info(logging.Postgres, logging.Startup, "Created default provider", map[logging.ExtraKey]interface{}{
-					"name":    provider.Name,
-					"channel": provider.Channel,
-				})
-			}
-		} else {
-			logger.Debug(logging.Postgres, logging.Startup, "Provider already exists, skipping", map[logging.ExtraKey]interface{}{
-				"name": provider.Name,
-			})
 		}
 	}
 

@@ -32,8 +32,9 @@ export function useUpdateTemplate() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdateTemplateInput }) => updateTemplate(id, input),
-    onSuccess: () => {
+    onSuccess: (_data, { id }) => {
       queryClient.invalidateQueries({ queryKey: templatesKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: templatesKeys.detail(id) });
     },
   });
 }

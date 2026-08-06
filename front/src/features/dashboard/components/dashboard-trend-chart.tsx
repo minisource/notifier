@@ -2,8 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
-import { SectionCard } from '@/components/shared/section-card';
-import { BarChart3 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@minisource/ui';
 interface TrendItem {
   date: string;
   total: number;
@@ -19,13 +18,13 @@ interface DashboardTrendChartProps {
 export function DashboardTrendChart({ data }: DashboardTrendChartProps) {
   const t = useTranslations();
   const params = useParams();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
 
   if (!data || data.length === 0) {
     return (
-      <SectionCard title={t('dashboard.daily_trend') || 'Daily Trend'} icon={BarChart3}>
+      <Card><CardHeader><CardTitle>{t('dashboard.daily_trend') || 'Daily Trend'}</CardTitle></CardHeader><CardContent>
         <p className="text-sm text-muted-foreground py-8 text-center">{t('common.no_data')}</p>
-      </SectionCard>
+      </CardContent></Card>
     );
   }
 
@@ -40,7 +39,7 @@ export function DashboardTrendChart({ data }: DashboardTrendChartProps) {
   const sorted = [...data].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   return (
-    <SectionCard title={t('dashboard.daily_trend') || 'Daily Trend'} icon={BarChart3}>
+    <Card><CardHeader><CardTitle>{t('dashboard.daily_trend') || 'Daily Trend'}</CardTitle></CardHeader><CardContent>
       <div className="space-y-3">
         {/* Legend */}
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
@@ -98,6 +97,6 @@ export function DashboardTrendChart({ data }: DashboardTrendChartProps) {
           })}
         </div>
       </div>
-    </SectionCard>
+    </CardContent></Card>
   );
 }

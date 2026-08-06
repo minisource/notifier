@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { adminDashboardApi, adminNotificationsApi, adminDeliveriesApi, adminProvidersApi, adminTemplatesApi, adminRemindersApi } from './notifier-api-mode';
+import { adminDashboardApi, adminNotificationsApi, adminDeliveriesApi, adminProvidersApi, adminTemplatesApi, adminRemindersApi, adminProviderAttemptsApi } from './notifier-api-mode';
 import { meNotificationsApi, mePreferencesApi, meRemindersApi } from './notifier-api-mode';
 import type {
   ListNotificationsParams,
@@ -37,9 +37,17 @@ export const notifierKeys = {
     list: (params?: Record<string, unknown>) => [...notifierKeys.deliveries.lists(), params] as const,
     detail: (id: string) => [...notifierKeys.deliveries.all, id] as const,
   },
+  providerAttempts: {
+    all: ['notifier', 'provider-attempts'] as const,
+    lists: () => [...notifierKeys.providerAttempts.all, 'list'] as const,
+    list: (params?: Record<string, unknown>) => [...notifierKeys.providerAttempts.lists(), params] as const,
+    details: () => [...notifierKeys.providerAttempts.all, 'detail'] as const,
+    detail: (id: string) => [...notifierKeys.providerAttempts.details(), id] as const,
+    events: (id: string) => [...notifierKeys.providerAttempts.detail(id), 'events'] as const,
+  },
   providers: {
     all: ['notifier', 'providers'] as const,
-    list: () => [...notifierKeys.providers.all, 'list'] as const,
+    list: (tenantId?: string) => [...notifierKeys.providers.all, 'list', tenantId ?? 'all'] as const,
     health: () => [...notifierKeys.providers.all, 'health'] as const,
   },
   templates: {
@@ -190,6 +198,39 @@ export function useCancelNotification() {
   });
 }
 
+// ==================== Provider Attempt Hooks ====================
+
+export function useAdminProviderAttempts(params?: Record<string, unknown>) {
+  return useQuery({
+    queryKey: notifierKeys.providerAttempts.list(params),
+    queryFn: () => adminProviderAttemptsApi.list(params as never),
+  });
+}
+
+export function useAdminProviderAttempt(id: string) {
+  return useQuery({
+    queryKey: notifierKeys.providerAttempts.detail(id),
+    queryFn: () => adminProviderAttemptsApi.get(id),
+    enabled: !!id,
+  });
+}
+
+export function useAdminProviderAttemptEvents(id: string) {
+  return useQuery({
+    queryKey: notifierKeys.providerAttempts.events(id),
+    queryFn: () => adminProviderAttemptsApi.getEvents(id),
+    enabled: !!id,
+  });
+}
+
+export function useAdminNotificationProviderAttempts(notificationId: string) {
+  return useQuery({
+    queryKey: [...notifierKeys.providerAttempts.all, 'by-notification', notificationId],
+    queryFn: () => adminProviderAttemptsApi.listByNotification(notificationId),
+    enabled: !!notificationId,
+  });
+}
+
 // ==================== Delivery Hooks ====================
 
 export function useAdminDeliveries(params?: { status?: string; provider?: string; page?: number; pageSize?: number }) {
@@ -222,10 +263,10 @@ export function useRetryDelivery() {
 
 // ==================== Provider Hooks ====================
 
-export function useAdminProviders() {
+export function useAdminProviders(tenantId?: string) {
   return useQuery({
-    queryKey: notifierKeys.providers.list(),
-    queryFn: () => adminProvidersApi.list(),
+    queryKey: notifierKeys.providers.list(tenantId),
+    queryFn: () => adminProvidersApi.list(tenantId && tenantId !== 'all' ? { tenantId } : undefined),
   });
 }
 

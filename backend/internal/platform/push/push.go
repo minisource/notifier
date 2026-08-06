@@ -2,6 +2,7 @@ package push
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,12 @@ import (
 // PushClient interface for sending push notifications
 type PushClient interface {
 	SendPush(deviceToken, title, body string, data map[string]string) error
+}
+
+// HealthCheckable is implemented by push clients that can verify
+// connectivity/credentials against the real push service.
+type HealthCheckable interface {
+	Check(ctx context.Context) error
 }
 
 // ProviderConfig holds push notification provider configuration
@@ -43,8 +50,6 @@ func NewClientFromConfig(config *ProviderConfig) (PushClient, error) {
 	switch config.Provider {
 	case "fcm":
 		return NewFCMClient(config)
-	case "mock":
-		return &MockPushClient{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported push provider: %s", config.Provider)
 	}
@@ -144,14 +149,5 @@ func (c *FCMClient) SendPush(deviceToken, title, body string, data map[string]st
 		return fmt.Errorf("FCM send failed: %s", fcmResp.Results[0].Error)
 	}
 
-	return nil
-}
-
-// MockPushClient is a mock implementation for testing
-type MockPushClient struct{}
-
-// SendPush mock implementation
-func (c *MockPushClient) SendPush(deviceToken, title, body string, data map[string]string) error {
-	// Mock implementation - just log
 	return nil
 }

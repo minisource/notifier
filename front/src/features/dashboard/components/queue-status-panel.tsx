@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { Clock, AlertTriangle, Activity, Bell } from 'lucide-react';
-import { MetricCard } from '@/components/shared/metric-card';
+import { MetricCard } from '@minisource/ui';
 
 interface QueueStatusPanelProps {
   queued: number;

@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
 import { ChannelBadge } from '@/components/shared/channel-badge';
 import { StatusBadge } from '@/components/shared/status-badge';
-import { Button } from '@/components/ui/button';
+import { Button } from '@minisource/ui';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/utils/date';
 import { shortId } from '@/lib/utils/format';
@@ -20,7 +20,7 @@ interface NotificationCenterItemProps {
 export function NotificationCenterItem({ notification, onMarkRead, onClick }: NotificationCenterItemProps) {
   const t = useTranslations();
   const params = useParams();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
 
   const isUnread = notification.status === 'pending' || notification.status === 'queued' || notification.status === 'processing' || notification.status === 'sent';
 

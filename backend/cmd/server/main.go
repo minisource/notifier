@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/minisource/go-common/logging"
 	"github.com/minisource/notifier/api"
@@ -62,23 +66,15 @@ func main() {
 	defer services.WebSocketHub.Stop()
 	defer services.Worker.Stop()
 
+	// Start the provider balance scheduler (account balance/quota monitoring)
+	services.BalanceScheduler.Start()
+	defer services.BalanceScheduler.Stop()
+
 	// Initialize gRPC server (optional)
 	grpcSrv := initializer.InitGRPCServer(cfg, services, logger)
 	if grpcSrv != nil {
 		defer grpcSrv.Stop()
 	}
-
-	// Setup graceful shutdown
-	go func() {
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-		<-sigChan
-
-		logger.Info(logging.General, logging.Startup, "Shutting down gracefully...", nil)
-
-		// Cleanup will happen via defer statements
-		os.Exit(0)
-	}()
 
 	// Create app context
 	appCtx := &api.AppContext{
@@ -91,10 +87,46 @@ func main() {
 		ReminderService:     services.Reminder,
 		ProviderRepo:        repos.Provider,
 		SettingRepo:         repos.Setting,
+		TenantRepo:          repos.Tenant,
 		WebSocketHub:        services.WebSocketHub,
 		AuthClient:          services.AuthClient,
+		BalanceService:      services.Balance,
+		BalanceRepo:         repos.ProviderBalance,
+		DeliveryControl:     services.DeliveryControl,
+		RetentionScheduler:  services.RetentionScheduler,
 	}
 
-	// Start HTTP server (blocks until shutdown)
-	api.InitServer(appCtx)
+	// Initialize HTTP server (routes + middleware, no listen yet)
+	app := api.InitServer(appCtx)
+
+	// Start HTTP server in a goroutine
+	go func() {
+		addr := fmt.Sprintf(":%s", cfg.Server.InternalPort)
+		logger.Info(logging.General, logging.Startup, "Server listening", map[logging.ExtraKey]interface{}{
+			"address": addr,
+		})
+		if err := app.Listen(addr); err != nil && err != http.ErrServerClosed {
+			logger.Fatal(logging.General, logging.Startup, "Failed to start server", map[logging.ExtraKey]interface{}{
+				"error": err.Error(),
+			})
+		}
+	}()
+
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info(logging.General, logging.Startup, "Shutting down server...", nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := app.ShutdownWithContext(ctx); err != nil {
+		logger.Error(logging.General, logging.Startup, "Server forced to shutdown", map[logging.ExtraKey]interface{}{
+			"error": err.Error(),
+		})
+	}
+
+	logger.Info(logging.General, logging.Startup, "Server exited properly", nil)
 }

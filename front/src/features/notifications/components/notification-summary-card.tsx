@@ -1,11 +1,11 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@minisource/ui';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { ChannelBadge } from '@/components/shared/channel-badge';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+import { Button } from '@minisource/ui';
+import { Separator } from '@minisource/ui';
 import {
   RotateCcw, XCircle, CheckCheck, Copy,
   AlertTriangle, Timer, Hash, User,
@@ -33,7 +33,7 @@ export function NotificationSummaryCard({
 }: NotificationSummaryCardProps) {
   const t = useTranslations();
   const params = useParams();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
 
   const handleCopyId = () => {
     navigator.clipboard.writeText(notification.id);

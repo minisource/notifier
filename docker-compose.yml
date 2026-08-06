@@ -1,0 +1,68 @@
+version: "3.8"
+
+# =============================================================================
+# MiniSource Notifier Service — Independent Docker Compose Stack
+# =============================================================================
+# Services:
+#   - notifier-backend:  Notifier Go API Server (internal port 9002)
+#   - notifier-frontend: Notifier Next.js Panel UI (internal port 3004)
+#
+# Usage:
+#   docker compose up -d --build
+# =============================================================================
+
+services:
+  notifier-backend:
+    build:
+      context: ..
+      dockerfile: notifier/backend/Dockerfile
+    container_name: minisource-notifier-backend
+    restart: unless-stopped
+    expose:
+      - "9002"
+    environment:
+      - SERVER_INTERNAL_PORT=9002
+      - SERVER_EXTERNAL_PORT=9002
+      - SERVER_RUN_MODE=development
+      - POSTGRES_HOST=minisource-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DBNAME=notifier_db
+      - DB_RUN_MIGRATIONS=true
+      - DB_AUTO_MIGRATE=true
+      - DB_RUN_SEED_DATA=true
+      - REDIS_HOST=minisource-redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=redis123
+      - AUTH_ENABLED=true
+      - AUTH_JWT_SECRET=change-me-in-production
+      - OTEL_SERVICE_NAME=notifier
+      - OTEL_EXPORTER_OTLP_ENDPOINT=minisource-otel-collector:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - OTEL_TRACES_SAMPLER=always_on
+    networks:
+      - minisource-network
+
+  notifier-frontend:
+    build:
+      context: ..
+      dockerfile: notifier/front/Dockerfile
+      args:
+        - NEXT_PUBLIC_NOTIFIER_AUTH_ENABLED=true
+    container_name: minisource-notifier-frontend
+    restart: unless-stopped
+    expose:
+      - "3004"
+    environment:
+      - NODE_ENV=production
+      - PORT=3004
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_NOTIFIER_AUTH_ENABLED=true
+    networks:
+      - minisource-network
+
+networks:
+  minisource-network:
+    name: minisource-network
+    external: true

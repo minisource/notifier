@@ -2,14 +2,13 @@
 
 import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
-import { PageHeader } from '@/components/shared/page-header';
-import { PageContainer } from '@/components/shared/page-container';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { ErrorState } from '@/components/shared/error-state';
-import { PageSkeleton } from '@/components/shared/loading-state';
-import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { PageHeader } from '@minisource/ui';
+import { Button } from '@minisource/ui';
+import { Card, CardContent } from '@minisource/ui';
+import { Badge } from '@minisource/ui';
+import { ErrorState } from '@minisource/ui';
+import { Skeleton } from '@minisource/ui';
+import { ConfirmDialog } from '@minisource/ui';
 import { useState } from 'react';
 import { useReminder, useCancelReminder } from '@/features/reminders/hooks/use-reminders';
 import { ArrowLeft, Calendar, CalendarX, User, Send, Clock } from 'lucide-react';
@@ -20,7 +19,7 @@ export default function ReminderDetailPage() {
   const t = useTranslations();
   const router = useRouter();
   const params = useParams();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
   const id = params?.id as string;
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 
@@ -29,23 +28,23 @@ export default function ReminderDetailPage() {
 
   if (isLoading) {
     return (
-      <PageContainer>
+      <div className="space-y-6">
         <PageHeader title={t('reminders.title')}>
-          <Button variant="ghost" onClick={() => router.push(`/${locale}/reminders`)} disabled>
+          <Button variant="ghost" onClick={() => router.push(`/reminders`)} disabled>
             <ArrowLeft className="ml-2 h-4 w-4" />
             {t('common.back')}
           </Button>
         </PageHeader>
-        <PageSkeleton context="reminders" layout="detail" />
-      </PageContainer>
+        <Skeleton className="h-64 w-full" />
+      </div>
     );
   }
 
   if (isError || !reminder) {
     return (
-      <PageContainer>
+      <div className="space-y-6">
         <PageHeader title={t('reminders.title')}>
-          <Button variant="ghost" onClick={() => router.push(`/${locale}/reminders`)}>
+          <Button variant="ghost" onClick={() => router.push(`/reminders`)}>
             <ArrowLeft className="ml-2 h-4 w-4" />
             {t('common.back')}
           </Button>
@@ -55,7 +54,7 @@ export default function ReminderDetailPage() {
           message={(error as Error)?.message || t('reminders.no_reminders')}
           onRetry={() => refetch()}
         />
-      </PageContainer>
+      </div>
     );
   }
 
@@ -67,12 +66,12 @@ export default function ReminderDetailPage() {
       : reminder.userId;
 
   return (
-    <PageContainer>
+    <div className="space-y-6">
       <PageHeader
         title={`${t('reminders.title')} — ${formatDateTime(reminder.scheduledAt, locale)}`}
-        subtitle={`${reminder.id.slice(0, 8)}... · ${t(`statuses.${reminder.status}`)}`}
+        description={`${reminder.id.slice(0, 8)}... · ${t(`statuses.${reminder.status}`)}`}
       >
-        <Button variant="ghost" size="sm" onClick={() => router.push(`/${locale}/reminders`)}>
+        <Button variant="ghost" size="sm" onClick={() => router.push(`/reminders`)}>
           <ArrowLeft className="ml-1.5 h-4 w-4" />
           {t('common.back')}
         </Button>
@@ -148,6 +147,6 @@ export default function ReminderDetailPage() {
         cancelLabel={t('common.no')}
         destructive
       />
-    </PageContainer>
+    </div>
   );
 }

@@ -7,19 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	sms "github.com/minisource/notifier/internal/platform/sms"
 )
-
-func TestMockSMSProvider(t *testing.T) {
-	client, err := sms.NewClientFromConfig(&sms.ProviderConfig{Provider: "mock"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := client.SendMessage(map[string]string{"token": "123456"}, "09123456789"); err != nil {
-		t.Fatalf("mock send failed: %v", err)
-	}
-}
 
 func TestFakeKavenegarLookupAPI(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

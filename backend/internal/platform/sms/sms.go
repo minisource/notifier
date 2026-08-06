@@ -3,7 +3,9 @@ package sms
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
+	appcfg "github.com/minisource/notifier/config"
 	providers "github.com/minisource/notifier/internal/platform/sms/platforms"
 )
 
@@ -17,6 +19,11 @@ type ProviderConfig struct {
 	Template  string   `json:"template"`
 	SenderID  string   `json:"senderId"`
 	Extra     []string `json:"extra"` // Extra params like region, apiAddress, etc.
+
+	// Telegram Gateway OTP provider setting: code TTL in seconds (30..3600).
+	// Base URL/timeouts/check phone come from the process config, never from
+	// user-editable provider settings.
+	TTL int `json:"ttl,omitempty"`
 }
 
 // ParseProviderConfig parses JSON config string into ProviderConfig
@@ -33,7 +40,7 @@ func ParseProviderConfig(configJSON string) (*ProviderConfig, error) {
 func NewClientFromConfig(config *ProviderConfig) (providers.SmsClient, error) {
 	switch config.Provider {
 	case "kavenegar":
-		return providers.GetKavenegarClient(config.APIKey, config.Template)
+		return providers.GetKavenegarClient(config.APIKey, config.Template, config.SenderID)
 	case "twilio":
 		return providers.GetTwilioClient(config.AccessID, config.AccessKey, config.Template)
 	case "tencent":
@@ -57,9 +64,25 @@ func NewClientFromConfig(config *ProviderConfig) (providers.SmsClient, error) {
 		return providers.GetSmsbaoClient(config.AccessID, config.AccessKey, config.Sign, config.Template, config.Extra)
 	case "submail":
 		return providers.GetSubmailClient(config.AccessID, config.AccessKey, config.Template)
-	case "mock":
-		return providers.NewMocker(config.AccessID, config.AccessKey, config.Sign, config.Template, config.Extra)
+	case "telegram_gateway":
+		// Runtime settings (base URL, timeouts, check phone) come from the
+		// process config; only the token and per-provider TTL may come from the
+		// provider row. The token falls back to the process token when the row
+		// has none (encrypted SecretConfig takes precedence).
+		tg := appcfg.GetConfig().TelegramGateway
+		token := config.APIKey
+		if token == "" {
+			token = tg.APIToken
+		}
+		return providers.GetTelegramGatewayClient(token, providers.TelegramGatewayClientConfig{
+			BaseURL:          tg.BaseURL,
+			RequestTimeout:   time.Duration(tg.RequestTimeoutSec) * time.Second,
+			ConnectTimeout:   time.Duration(tg.ConnectTimeoutSec) * time.Second,
+			MaxResponseBytes: int64(tg.MaxResponseBytes),
+			TTL:              config.TTL,
+			CheckPhone:       tg.CheckPhone,
+		})
 	default:
-		return nil, fmt.Errorf("unsupported or inactive SMS provider: %s (supported: kavenegar, twilio, tencent, huawei, infobip, msg91, netgsm, oson, smsbao, submail, mock)", config.Provider)
+		return nil, fmt.Errorf("unsupported or inactive SMS provider: %s (supported: kavenegar, twilio, tencent, huawei, infobip, msg91, netgsm, oson, smsbao, submail, telegram_gateway)", config.Provider)
 	}
 }

@@ -22,7 +22,7 @@ function mapReminder(r: NotifierReminder): Reminder {
 export async function listReminders(): Promise<Reminder[]> {
   const result = await adminRemindersApi.list();
   // Backend returns paginated { items: [...], total, ... } (uses dto.PaginatedResponse with Items field)
-  // Mock returns { data: [...], total, ... } (PaginatedResponse with data field from notifier-types)
+  // Returns { data: [...], total, ... } (PaginatedResponse with data field from notifier-types)
   const items = (result as any).items || (result as any).data || [];
   return items.map(mapReminder);
 }

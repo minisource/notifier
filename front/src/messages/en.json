@@ -1,5 +1,5 @@
 {
-    "common": {
+  "common": {
     "click_to_view": "Click to view",
     "app_name": "Notifier",
     "loading": "Loading...",
@@ -8,6 +8,7 @@
     "delete": "Delete",
     "edit": "Edit",
     "create": "Create",
+    "add": "Add",
     "search": "Search",
     "filter": "Filter",
     "clear": "Clear",
@@ -25,9 +26,20 @@
     "status": "Status",
     "type": "Type",
     "channel": "Channel",
+    "recipient": "Recipient",
     "created_at": "Created At",
     "updated_at": "Updated At",
     "id": "ID",
+    "view": "View",
+    "enable": "Enable",
+    "disable": "Disable",
+    "refresh": "Refresh",
+    "active": "Active",
+    "inactive": "Inactive",
+    "tenant": "Tenant",
+    "saving": "Saving...",
+    "saved": "Saved",
+    "unknown_user": "Unknown User",
     "copy_id": "Copy ID",
     "copied": "Copied",
     "view_details": "View Details",
@@ -37,7 +49,6 @@
     "all": "All",
     "menu": "Menu",
     "needs_attention": "Needs attention",
-    "click_to_view": "Click to view",
     "total": "total",
     "page": "Page",
     "of": "of"
@@ -52,7 +63,11 @@
     "templates": "Templates",
     "reminders": "Reminders",
     "deliveries": "Deliveries",
+    "delivery_control": "Delivery Control",
+    "delivery_control_desc": "Global outbound delivery pause & emergency freeze",
     "providers": "Providers",
+    "provider_logs": "Provider Logs",
+    "provider_logs_desc": "Provider request history and delivery attempts",
     "preferences": "Preferences",
     "tenants": "Projects",
     "observability": "Observability",
@@ -62,7 +77,8 @@
     "all_templates": "All Templates",
     "create_template": "Create Template",
     "all_reminders": "All Reminders",
-    "schedule_reminder": "Schedule Reminder"
+    "schedule_reminder": "Schedule Reminder",
+    "test_center": "Test Center"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -100,6 +116,15 @@
     "body": "Body",
     "subject": "Subject",
     "locale": "Locale",
+    "user_id": "User ID",
+    "recipient_id": "Recipient ID",
+    "template_key": "Template Key",
+    "provider_msg_id": "Provider Message ID",
+    "additional_info": "Additional Info",
+    "idempotency_key": "Idempotency Key",
+    "variables": "Variables",
+    "error_code": "Error Code",
+    "failed_at": "Failed At",
     "scheduled_at": "Scheduled At",
     "sent_at": "Sent At",
     "delivered_at": "Delivered At",
@@ -110,7 +135,21 @@
     "retry_count": "Retries",
     "max_retries": "Max Retries",
     "delivery_attempts": "Delivery Attempts",
-    "timeline": "Delivery Timeline",
+    "timeline": {
+      "created": "Created",
+      "queued": "Queued",
+      "scheduled": "Scheduled",
+      "processing": "Processing",
+      "sent": "Sent to Provider",
+      "delivered": "Delivered",
+      "seen": "Seen",
+      "read": "Read",
+      "clicked": "Clicked",
+      "failed": "Failed",
+      "dead": "Dead Letter",
+      "cancelled": "Cancelled",
+      "pending": "Pending..."
+    },
     "payload": "Payload",
     "metadata": "Metadata",
     "retry_now": "Retry Now",
@@ -128,7 +167,10 @@
       "empty_state": "No notifications found",
       "no_results": "No notifications match your filters. Try adjusting your search criteria.",
       "no_notifications_yet": "No notifications have been sent yet. Click Send to create your first notification.",
-      "search_placeholder": "Search by recipient, subject, or ID..."
+      "search_placeholder": "Search by recipient, subject, or ID...",
+      "select_all": "Select all on this page",
+      "select_row": "Select this notification",
+      "selected": "selected"
     },
     "filters": {
       "all_statuses": "All statuses",
@@ -144,14 +186,22 @@
       "cancel": "Cancel",
       "mark_read": "Mark as Read",
       "open_detail": "Open Detail",
+      "retry_success": "Delivery queued for retry",
       "confirm_retry_title": "Retry Notification?",
       "confirm_retry_desc": "This notification will be requeued for delivery. This will count as a new attempt.",
       "confirm_cancel_title": "Cancel Notification?",
-      "confirm_cancel_desc": "This will cancel the notification and it will not be delivered. This action cannot be undone."
+      "confirm_cancel_desc": "This will cancel the notification and it will not be delivered. This action cannot be undone.",
+      "retry_selected": "Retry Selected",
+      "retry_all_failed": "Retry All Failed",
+      "confirm_retry_selected_title": "Retry selected notifications?",
+      "confirm_retry_selected_desc": "The selected failed notifications will be requeued for one more delivery attempt each. They will not receive a new automatic retry budget.",
+      "confirm_retry_all_title": "Retry all failed notifications?",
+      "confirm_retry_all_desc": "Every failed and dead-letter notification will be requeued for one more delivery attempt each. They will not receive a new automatic retry budget."
     },
     "form": {
       "subtitle": "Compose and send a new notification through any channel",
       "recipient_section": "Recipient",
+      "tenant_hint": "Choose the tenant/project this notification belongs to. Only providers available to that tenant (its own + global) will be used.",
       "content_section": "Message Content",
       "options_section": "Options",
       "recipient_value": "Recipient Address",
@@ -164,25 +214,20 @@
       "variable_value": "Value",
       "locale": "Language",
       "schedule_later": "Schedule for later",
-      "idempotency_key": "Idempotency Key"
+      "idempotency_key": "Idempotency Key",
+      "provider_section": "Provider",
+      "select_provider": "Delivery provider (optional)",
+      "auto_provider": "Auto (use default for channel)",
+      "provider_hint": "Notifications on {channel} will be delivered through the selected provider.",
+      "available_providers": "Configured providers for this channel",
+      "no_providers_channel": "No providers are configured for this channel yet.",
+      "failover_order": "Failover order",
+      "failover_hint": "If the first provider fails, notifications automatically fall back to the next one in this order.",
+      "auto_failover": "Auto (failover through all)",
+      "template_prefilled": "Message content was prefilled from the template — edit if needed."
     },
     "detail": {
       "not_found": "Notification not found or has been removed."
-    },
-    "timeline": {
-      "created": "Created",
-      "queued": "Queued",
-      "scheduled": "Scheduled",
-      "processing": "Processing",
-      "sent": "Sent to Provider",
-      "delivered": "Delivered",
-      "seen": "Seen",
-      "read": "Read",
-      "clicked": "Clicked",
-      "failed": "Failed",
-      "dead": "Dead Letter",
-      "cancelled": "Cancelled",
-      "pending": "Pending..."
     },
     "attempts": {
       "no_attempts": "No delivery attempts recorded yet.",
@@ -212,7 +257,10 @@
     "not_active": "Inactive",
     "provider": "Provider",
     "provider_template": "Provider Template",
-    "missing_variables": "Missing Variables"
+    "provider_mapping": "Provider Mappings",
+    "missing_variables": "Missing Variables",
+    "empty_body": "No body content defined",
+    "no_mappings_hint": "No provider-specific templates defined. The main template name or key will be used as a fallback."
   },
   "reminders": {
     "title": "Reminders",
@@ -232,9 +280,148 @@
     "next_retry": "Next Retry",
     "provider": "Provider",
     "no_deliveries": "No deliveries found",
+    "retrying": "Retrying…",
     "failed_only": "Failed Only",
     "dead_letter": "Dead Letter",
     "retryable": "Retryable"
+  },
+  "providerLogs": {
+    "title": "Provider Logs",
+    "subtitle": "Provider request lifecycle and delivery attempts",
+    "detail_title": "Provider Attempt Details",
+    "attempt": "Attempt",
+    "attempt_number": "Attempt #",
+    "fallback_sequence": "Fallback",
+    "provider": "Provider",
+    "channel": "Channel",
+    "status": "Status",
+    "provider_status": "Provider Status",
+    "provider_message_id": "Provider Message ID",
+    "recipient": "Recipient",
+    "duration": "Duration",
+    "http_status": "HTTP Status",
+    "retryable": "Retryable",
+    "error_kind": "Error Kind",
+    "error_code": "Error Code",
+    "error_message": "Error Message",
+    "notification_id": "Notification ID",
+    "request_id": "Request ID",
+    "correlation_id": "Correlation ID",
+    "trace_id": "Trace ID",
+    "queued_at": "Queued At",
+    "started_at": "Started At",
+    "completed_at": "Completed At",
+    "no_attempts": "No provider attempts recorded yet.",
+    "no_attempts_desc": "Provider request logs appear automatically when notifications are sent through a provider.",
+    "no_results": "No provider attempts match the selected filters.",
+    "search_placeholder": "Search by notification ID, provider message ID, request ID…",
+    "filters": {
+      "title": "Filters",
+      "all_statuses": "All statuses",
+      "all_providers": "All providers",
+      "all_channels": "All channels",
+      "date_from": "From",
+      "date_to": "To"
+    },
+    "status": {
+      "queued": "Queued",
+      "preparing": "Preparing",
+      "sending": "Sending",
+      "accepted": "Accepted",
+      "pending": "Pending",
+      "delivered": "Delivered",
+      "failed": "Failed",
+      "rejected": "Rejected",
+      "timed_out": "Timed Out",
+      "cancelled": "Cancelled",
+      "bounced": "Bounced",
+      "complained": "Complained",
+      "unknown": "Unknown"
+    },
+    "error_kinds": {
+      "configuration": "Configuration",
+      "invalid_recipient": "Invalid Recipient",
+      "invalid_message": "Invalid Message",
+      "provider": "Provider",
+      "rate_limited": "Rate Limited",
+      "timeout": "Timeout",
+      "network": "Network",
+      "authentication": "Authentication",
+      "cancelled": "Cancelled",
+      "unknown": "Unknown"
+    },
+    "sections": {
+      "overview": "Overview",
+      "timeline": "Lifecycle Timeline",
+      "request": "Provider Request",
+      "response": "Provider Response",
+      "error": "Error Information",
+      "correlation": "Correlation & Tracing",
+      "relationships": "Retry / Fallback Relationships"
+    },
+    "timeline": {
+      "attempt_created": "Attempt created",
+      "request_started": "Request started",
+      "request_failed": "Request failed",
+      "request_timed_out": "Request timed out",
+      "request_cancelled": "Request cancelled",
+      "response_received": "Response received",
+      "provider_accepted": "Provider accepted",
+      "provider_rejected": "Provider rejected",
+      "delivery_pending": "Delivery pending",
+      "delivered": "Delivered",
+      "delivery_failed": "Delivery failed",
+      "retry_scheduled": "Retry scheduled",
+      "fallback_scheduled": "Fallback scheduled",
+      "bounced": "Bounced",
+      "complained": "Complained",
+      "malformed_response": "Malformed response",
+      "unknown": "Event"
+    },
+    "redaction": {
+      "redacted": "REDACTED",
+      "masked": "MASKED",
+      "truncated": "TRUNCATED",
+      "not_captured": "NOT CAPTURED",
+      "redacted_hint": "Sensitive value removed by redaction policy",
+      "truncated_hint": "Body exceeds capture limit; original size {size}",
+      "not_captured_hint": "Value was not captured by the provider adapter",
+      "expired": "Expired by retention policy",
+      "expired_hint": "This detail was removed by the retention policy."
+    },
+    "copy": {
+      "copy": "Copy",
+      "copied": "Copied",
+      "copy_sanitized_hint": "Copies only the sanitized value"
+    },
+    "curl": {
+      "title": "cURL",
+      "copy": "Copy cURL",
+      "copied": "cURL copied",
+      "run": "Run test request",
+      "running": "Running…",
+      "redacted_hint": "Replace [REDACTED] placeholders before running — this sample is sanitized.",
+      "result": "Result",
+      "failed": "Request failed",
+      "cors_hint": "Browsers block cross-origin provider requests (CORS). For full fidelity, copy the cURL and run it in your terminal."
+    },
+    "actions": {
+      "refresh": "Refresh",
+      "view_notification": "View Notification",
+      "back_to_logs": "Back to Provider Logs"
+    }
+  },
+  "providerErrors": {
+    "title": "Error Investigation",
+    "docs_link": "View Kavenegar REST API docs",
+    "details_link": "View delivery attempt logs",
+    "kavenegar": {
+      "code_401": "Kavenegar rejected the API key. Verify the apiKey saved in the provider config.",
+      "code_403": "Kavenegar denied access with the configured API key. Check the API key permissions in the Kavenegar panel.",
+      "code_406": "Kavenegar rejected the recipient phone number. Check the number format (e.g. 09xxxxxxxxx or +98xxxxxxxxx).",
+      "code_412": "Kavenegar rejected the sender line. Register and approve a sender line (خط ارسال) in the Kavenegar panel, then set its number in this provider's Sender Line (senderId) field.",
+      "code_413": "Kavenegar rejected the recipient phone number. Check the number format (e.g. 09xxxxxxxxx or +98xxxxxxxxx)."
+    }
   },
   "providers": {
     "title": "Providers",
@@ -245,7 +432,20 @@
     "disabled": "Disabled",
     "success_rate": "Success Rate",
     "last_failure": "Last Failure",
+    "last_success": "Last Success",
+    "last_error": "Last Error",
+    "avg_latency": "Avg Latency",
+    "no_data": "No data",
+    "health_title": "Provider Health",
+    "health_healthy": "Healthy",
+    "health_degraded": "Degraded",
+    "health_down": "Down",
+    "health_disabled": "Disabled",
+    "health_inactive": "Inactive",
     "test": "Test Provider",
+    "health_check": "Health Check",
+    "check_all_health": "Check All Health",
+    "health_check_done": "Health check completed",
     "dry_run": "Dry Run",
     "dry_run_enabled": "Simulate without sending",
     "dry_run_disabled": "Send real test message",
@@ -256,7 +456,104 @@
     "edit_title": "Edit Provider",
     "status": "Status",
     "name": "Name",
+    "tenant": "Tenant / Project",
+    "tenant_global": "All Tenants (Global)",
+    "tenant_hint": "Providers created for a specific tenant are only used by that tenant. Global providers are available to every tenant.",
     "provider_type": "Provider Type",
+    "type_hint": "Available provider types depend on the selected channel.",
+    "config_section": "Provider Configuration",
+    "no_config_needed": "This provider type does not require additional configuration.",
+    "types": {
+      "kavenegar": "Kavenegar",
+      "twilio": "Twilio",
+      "tencent": "Tencent Cloud",
+      "huawei": "Huawei Cloud",
+      "infobip": "Infobip",
+      "msg91": "MSG91",
+      "netgsm": "Netgsm",
+      "oson": "Oson",
+      "smsbao": "SMSBao",
+      "submail": "Submail",
+      "smtp": "SMTP",
+      "fcm": "Firebase FCM",
+      "custom": "Custom"
+    },
+    "fields": {
+      "kavenegar": {
+        "apiKey": "API Key",
+        "template": "Template Name",
+        "senderId": "Sender Line (for plain-text sends)"
+      },
+      "twilio": {
+        "accessId": "Account SID",
+        "accessKey": "Auth Token",
+        "template": "Message Template"
+      },
+      "tencent": {
+        "accessId": "SecretId",
+        "accessKey": "SecretKey",
+        "sign": "Signature",
+        "template": "Template ID",
+        "appId": "SDK AppID"
+      },
+      "huawei": {
+        "accessId": "App Key",
+        "accessKey": "App Secret",
+        "sign": "Signature",
+        "template": "Template ID",
+        "apiAddress": "API Address",
+        "sender": "Sender"
+      },
+      "infobip": {
+        "senderId": "Sender",
+        "apiKey": "API Key",
+        "template": "Template",
+        "baseUrl": "Base URL"
+      },
+      "msg91": {
+        "senderId": "Sender ID",
+        "apiKey": "Auth Key",
+        "template": "Template ID"
+      },
+      "netgsm": {
+        "accessId": "User Code",
+        "accessKey": "Password",
+        "senderId": "Message Header",
+        "template": "Template"
+      },
+      "oson": {
+        "accessId": "Login / Sender ID",
+        "accessKey": "Secret Access Hash",
+        "senderId": "Sign",
+        "template": "Message Template"
+      },
+      "smsbao": {
+        "accessId": "Username",
+        "accessKey": "API Key",
+        "sign": "Signature",
+        "template": "Template",
+        "goodsid": "Goods ID"
+      },
+      "submail": {
+        "accessId": "App ID",
+        "accessKey": "Signature",
+        "template": "Project"
+      },
+      "smtp": {
+        "host": "SMTP Host",
+        "port": "Port",
+        "username": "Username",
+        "password": "Password",
+        "from": "From Address",
+        "fromName": "From Name",
+        "useTls": "Use TLS"
+      },
+      "fcm": {
+        "serverKey": "Server Key",
+        "projectId": "Project ID",
+        "privateKeyJson": "Service Account JSON"
+      }
+    },
     "priority": "Priority",
     "description": "Description",
     "active": "Active",
@@ -280,7 +577,30 @@
     "channel": "Channel",
     "yes": "Yes",
     "set_default": "Set as Default",
-    "unset_default": "Unset Default"
+    "unset_default": "Unset Default",
+    "error": "Error",
+    "balance": {
+      "title": "Account Balance & Credit",
+      "refresh_now": "Refresh Now",
+      "current_balance": "Current Balance",
+      "estimated": "Estimated",
+      "manual": "Manual",
+      "last_successful_refresh": "Last Successful Refresh",
+      "consecutive_failures": "Consecutive Failures",
+      "capability": "Capability",
+      "history": "Balance History",
+      "alerts": "Alerts",
+      "acknowledge": "Acknowledge",
+      "thresholds": "Alert Thresholds",
+      "warning_threshold": "Warning below",
+      "critical_threshold": "Critical below",
+      "critical_gt_warning": "Critical threshold must be lower than warning",
+      "unit_hint": "Thresholds use the provider’s reported unit — a monetary credit amount (e.g. Rial) or a message count.",
+      "units": {
+        "rial": "Rial",
+        "count": "count"
+      }
+    }
   },
   "preferences": {
     "title": "Preferences",
@@ -305,7 +625,18 @@
     "name": "Project Name",
     "channels": "Active Channels",
     "quota": "Quota",
-    "no_tenants": "No projects found"
+    "no_tenants": "No projects found",
+    "organization_context": "Organization Context",
+    "all_tenants": "All Tenants (Global)",
+    "all_tenants_desc": "View system-wide data",
+    "switch_context": "Switch Organization Context",
+    "manage": "Manage Projects",
+    "default": "Default Tenant",
+    "slug_label": "Slug",
+    "slug": "Slug",
+    "role_label": "Role",
+    "managed_elsewhere_title": "Tenants are managed in the Auth service",
+    "managed_elsewhere_desc": "This list comes from your Auth account. Create, edit or remove tenants there — they will appear here automatically."
   },
   "observability": {
     "title": "Observability",
@@ -331,13 +662,44 @@
     "dark": "Dark",
     "system": "System",
     "api_mode": "API Mode",
-    "mock": "Mock",
-    "real": "Real",
-    "backend_url": "Backend URL",
     "role": "Role",
+    "active": "Active",
+    "inactive": "Inactive",
+    "error": "Error",
     "admin": "Admin",
     "operator": "Operator",
-    "viewer": "Viewer"
+    "viewer": "Viewer",
+    "account": "Account",
+    "email": "Email",
+    "super_admin": "Super Admin",
+    "retry_policy": "Retry Policy",
+    "auto_retry": "Auto Retry",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "max_retry_attempts": "Max Retry Attempts",
+    "strategy": "Strategy",
+    "save_retry_policy": "Save Retry Policy",
+    "enabled_channels": "Enabled Channels",
+    "rate_limit": "Rate Limit",
+    "rate_limiting": "Rate Limiting",
+    "on": "On",
+    "off": "Off",
+    "per_minute": "Per Minute",
+    "per_hour": "Per Hour",
+    "save_rate_limits": "Save Rate Limits",
+    "quiet_hours": "Quiet Hours",
+    "quiet_hours_suppressed": "Notifications will be suppressed during quiet hours",
+    "start": "Start",
+    "end": "End",
+    "timezone": "Timezone",
+    "save_quiet_hours": "Save Quiet Hours",
+    "data_retention": "Data Retention",
+    "retention_period": "Retention Period",
+    "days_approx": "days (~{months} months)",
+    "save_retention": "Save Retention",
+    "loading_channels": "Loading channel configuration...",
+    "loading_quiet_hours": "Loading quiet hours configuration...",
+    "failed_load": "Failed to load settings from the server. Some features may be limited."
   },
   "forms": {
     "required": "Required",
@@ -347,7 +709,9 @@
     "max_length": "Maximum {len} characters",
     "select_option": "Select an option",
     "search_options": "Search options...",
-    "no_options": "No options found"
+    "no_options": "No options found",
+    "search_users": "Search users by name/email/phone...",
+    "type_to_search": "Type at least 2 characters..."
   },
   "errors": {
     "generic": "Something went wrong. Please try again.",
@@ -357,7 +721,8 @@
     "forbidden_description": "You do not have permission to access this page.",
     "validation": "Validation error. Please check the fields.",
     "network": "Network error. Please check your connection.",
-    "timeout": "Request timed out."
+    "timeout": "Request timed out.",
+    "search_failed": "Failed to search users"
   },
   "statuses": {
     "healthy": "Healthy",
@@ -432,11 +797,7 @@
     },
     "settings": {
       "debug": "Debug Info",
-      "mockRoles": "Mock Roles",
-      "mockRolesHint": "Comma-separated roles for mock session",
-      "saveRoles": "Save Roles",
-      "mockModeActive": "Mock Mode Active",
-      "mockModeHint": "Data is simulated"
+      "saveRoles": "Save Roles"
     },
     "accessibility": {
       "closeDialog": "Close dialog",
@@ -447,5 +808,52 @@
       "selectAll": "Select all",
       "deselectAll": "Deselect all"
     }
+  },
+  "deliveryControl": {
+    "title": "Delivery Control",
+    "subtitle": "Global outbound delivery pause and emergency freeze",
+    "status_title": "Current Status",
+    "state_active": "Active",
+    "state_pause_requested": "Pause requested",
+    "state_paused": "Paused",
+    "state_resume_requested": "Resume requested",
+    "state_active_with_uncertain_attempts": "Active with uncertain attempts",
+    "mode_immediate": "Immediate",
+    "mode_drain": "Drain",
+    "reason": "Reason",
+    "actor": "Actor",
+    "version": "Generation",
+    "paused_at": "Paused at",
+    "resumed_at": "Resumed at",
+    "expires_at": "Auto-resume at",
+    "held_count": "Held deliveries",
+    "retrying_held": "Retries frozen",
+    "uncertain_count": "Uncertain attempts",
+    "active_attempt_count": "Active attempts",
+    "last_updated": "Last updated",
+    "pause_button": "Pause Deliveries",
+    "resume_button": "Resume Deliveries",
+    "pause_dialog_title": "Pause all outbound delivery?",
+    "pause_dialog_description": "New outbound provider requests will be blocked. Queued notifications, scheduled sends, retries, fallbacks, manual resends, and test sends will remain held until delivery is resumed. Requests already transmitted to a provider may still complete and cannot always be recalled.",
+    "resume_dialog_title": "Resume outbound delivery?",
+    "resume_dialog_description": "Held deliveries will be released gradually. Attempts with an unknown outcome will not be blindly retried.",
+    "reason_label": "Reason (required)",
+    "reason_placeholder": "e.g. Emergency maintenance, provider outage, incident response",
+    "resume_reason_placeholder": "Optional: why resuming now",
+    "mode_label": "Pause mode",
+    "expires_at_label": "Auto-resume deadline (optional)",
+    "confirm_pause": "Pause Deliveries",
+    "confirm_resume": "Resume Deliveries",
+    "history_title": "Pause / Resume History",
+    "no_history": "No pause or resume events yet",
+    "held_title": "Held Deliveries",
+    "no_held": "No deliveries are currently held",
+    "held_reason": "Held reason",
+    "held_at": "Held at",
+    "banner_title": "Outbound delivery is paused",
+    "banner_description": "No new messages are being sent to providers. Queued, scheduled, retry, and fallback deliveries are held until resumed.",
+    "go_to_control": "Manage",
+    "held_count_label": "{count} held",
+    "in_flight_warning": "In-flight requests that already reached a provider may complete; their outcome cannot always be guaranteed."
   }
 }

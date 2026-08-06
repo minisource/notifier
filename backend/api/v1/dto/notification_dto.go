@@ -45,6 +45,10 @@ type NotificationRecipientRequest struct {
 // CreateNotificationRequest represents a request to create a notification
 // Canonical format uses channel + recipient. Legacy flat fields are also accepted.
 type CreateNotificationRequest struct {
+	// TenantID scopes the notification to a specific tenant. Accepts a tenant
+	// UUID, or "all"/"default"/empty for global scope. When omitted, falls
+	// back to the X-Tenant-Id header.
+	TenantID       string                           `json:"tenantId,omitempty"`
 	// Channel is the primary notification channel (sms, email, push, in_app, webhook)
 	Channel        models.NotificationChannel       `json:"channel,omitempty"`
 	// Type is a backward-compatible alias for channel
@@ -61,6 +65,10 @@ type CreateNotificationRequest struct {
 	Subject        string                           `json:"subject,omitempty"`
 	Body           string                           `json:"body,omitempty"`
 	Metadata       map[string]interface{}           `json:"metadata,omitempty"`
+	// Variables are the template variables (e.g. {"code":"4321"}) that get
+	// rendered into template-based sends. They are merged into metadata under
+	// the "data" key so the send pipeline can map them to provider tokens.
+	Variables      map[string]string                `json:"variables,omitempty"`
 	TemplateID     *uuid.UUID                       `json:"templateId,omitempty"`
 	TemplateKey    string                           `json:"templateKey,omitempty"`
 	Locale         string                           `json:"locale,omitempty"`
@@ -86,37 +94,42 @@ const (
 
 // DeliveryResponse represents a notification delivery attempt group
 type DeliveryResponse struct {
-	ID              uuid.UUID          `json:"id"`
-	NotificationID  uuid.UUID          `json:"notificationId"`
-	Provider        string             `json:"provider"`
-	Channel         string             `json:"channel"`
-	Status          string             `json:"status"`
-	AttemptCount    int                `json:"attemptCount"`
-	MaxAttempts     int                `json:"maxAttempts"`
-	LastErrorCode   string             `json:"lastErrorCode,omitempty"`
-	LastErrorMessage string            `json:"lastErrorMessage,omitempty"`
-	NextRetryAt     *time.Time         `json:"nextRetryAt,omitempty"`
-	CreatedAt       time.Time          `json:"createdAt"`
-	UpdatedAt       time.Time          `json:"updatedAt"`
-	CompletedAt     *time.Time         `json:"completedAt,omitempty"`
-	Attempts        []*AttemptResponse `json:"attempts,omitempty"`
+	ID                uuid.UUID          `json:"id"`
+	NotificationID    uuid.UUID          `json:"notificationId"`
+	Provider          string             `json:"provider"`
+	Channel           string             `json:"channel"`
+	Status            string             `json:"status"`
+	AttemptCount      int                `json:"attemptCount"`
+	MaxAttempts       int                `json:"maxAttempts"`
+	LastErrorCode     string             `json:"lastErrorCode,omitempty"`
+	LastErrorMessage  string             `json:"lastErrorMessage,omitempty"`
+	NextRetryAt       *time.Time         `json:"nextRetryAt,omitempty"`
+	RecipientEmail    string             `json:"recipientEmail,omitempty"`
+	RecipientPhone    string             `json:"recipientPhone,omitempty"`
+	RecipientID       string             `json:"recipientId,omitempty"`
+	Subject           string             `json:"subject,omitempty"`
+	Body              string             `json:"body,omitempty"`
+	CreatedAt         time.Time          `json:"createdAt"`
+	UpdatedAt         time.Time          `json:"updatedAt"`
+	CompletedAt       *time.Time         `json:"completedAt,omitempty"`
+	Attempts          []*AttemptResponse `json:"attempts,omitempty"`
 }
 
 // AttemptResponse represents a single delivery attempt
 type AttemptResponse struct {
-	ID                     uuid.UUID  `json:"id"`
-	DeliveryID             uuid.UUID  `json:"deliveryId"`
-	AttemptNumber          int        `json:"attemptNumber"`
-	Status                 string     `json:"status"`
-	Retryable              bool       `json:"retryable"`
-	ErrorCode              string     `json:"errorCode,omitempty"`
-	ErrorMessage           string     `json:"errorMessage,omitempty"`
-	ProviderMessageID      string     `json:"providerMessageId,omitempty"`
-	ProviderResponseSanitized string `json:"providerResponseSanitized,omitempty"`
-	LatencyMs              int64      `json:"latencyMs,omitempty"`
-	CreatedAt              time.Time  `json:"createdAt"`
-	CompletedAt            *time.Time `json:"completedAt,omitempty"`
-	NextRetryAt            *time.Time `json:"nextRetryAt,omitempty"`
+	ID                        uuid.UUID  `json:"id"`
+	DeliveryID                uuid.UUID  `json:"deliveryId"`
+	AttemptNumber             int        `json:"attemptNumber"`
+	Status                    string     `json:"status"`
+	Retryable                 bool       `json:"retryable"`
+	ErrorCode                 string     `json:"errorCode,omitempty"`
+	ErrorMessage              string     `json:"errorMessage,omitempty"`
+	ProviderMessageID         string     `json:"providerMessageId,omitempty"`
+	ProviderResponseSanitized string     `json:"providerResponseSanitized,omitempty"`
+	LatencyMs                 int64      `json:"latencyMs,omitempty"`
+	CreatedAt                 time.Time  `json:"createdAt"`
+	CompletedAt               *time.Time `json:"completedAt,omitempty"`
+	NextRetryAt               *time.Time `json:"nextRetryAt,omitempty"`
 }
 
 // == Reminder DTOs ==
@@ -160,6 +173,7 @@ type ReminderResponse struct {
 // ProviderResponse represents a notification provider
 type ProviderResponse struct {
 	ID               string                 `json:"id"`
+	TenantID         *uuid.UUID             `json:"tenantId,omitempty"`
 	Name             string                 `json:"name"`
 	Channel          string                 `json:"channel"`
 	Type             string                 `json:"type,omitempty"`
@@ -179,8 +193,10 @@ type ProviderResponse struct {
 	UpdatedAt        time.Time              `json:"updatedAt"`
 }
 
-// CreateProviderRequest represents a request to create a provider
+// CreateProviderRequest represents a request to create a provider.
+// TenantID accepts a tenant UUID, or "all"/"default"/empty for a global provider.
 type CreateProviderRequest struct {
+	TenantID    string                 `json:"tenantId,omitempty"`
 	Name        string                 `json:"name" validate:"required"`
 	Channel     string                 `json:"channel" validate:"required"`
 	Type        string                 `json:"type,omitempty"`
@@ -192,8 +208,10 @@ type CreateProviderRequest struct {
 	SecretConfig map[string]interface{} `json:"secretConfig,omitempty"`
 }
 
-// UpdateProviderRequest represents a request to update a provider
+// UpdateProviderRequest represents a request to update a provider.
+// TenantID accepts a tenant UUID, or "all"/"default"/empty to set a global provider.
 type UpdateProviderRequest struct {
+	TenantID     string                 `json:"tenantId,omitempty"`
 	Name         string                 `json:"name,omitempty"`
 	Channel      string                 `json:"channel,omitempty"`
 	Type         string                 `json:"type,omitempty"`
@@ -254,12 +272,19 @@ type DashboardOverviewResponse struct {
 	GeneratedAt        time.Time                     `json:"generatedAt"`
 }
 
-// ProviderHealthItem represents a single provider's health status
+// ProviderHealthItem represents a single provider's health status (result of a
+// REAL connectivity check against the provider's own API).
 type ProviderHealthItem struct {
-	Name    string `json:"name"`
-	Channel string `json:"channel"`
-	Status  string `json:"status"`
-	SuccessRate float64 `json:"successRate"`
+	ProviderID  string    `json:"providerId,omitempty"`
+	Name        string    `json:"name"`
+	Channel     string    `json:"channel"`
+	Type        string    `json:"type,omitempty"`
+	Status      string    `json:"status"` // healthy | degraded | down | disabled | unsupported
+	SuccessRate float64   `json:"successRate"`
+	LatencyMs   int64     `json:"latencyMs,omitempty"`
+	Message     string    `json:"message,omitempty"`
+	Error       string    `json:"error,omitempty"`
+	CheckedAt   time.Time `json:"checkedAt,omitempty"`
 }
 
 // ProviderHealthResponse represents the aggregate health of all providers
@@ -272,13 +297,14 @@ type ProviderHealthResponse struct {
 	CheckedAt     time.Time             `json:"checkedAt"`
 }
 
-// ProviderTestRequest represents a provider test request
+// ProviderTestRequest represents a provider test request.
+// DryRun defaults to true when omitted (a plain connectivity/credential check).
 type ProviderTestRequest struct {
 	Channel   string `json:"channel,omitempty"`
 	Recipient string `json:"recipient,omitempty"`
 	Subject   string `json:"subject,omitempty"`
 	Body      string `json:"body,omitempty"`
-	DryRun    bool   `json:"dryRun"`
+	DryRun    *bool  `json:"dryRun,omitempty"`
 }
 
 // ProviderTestResponse represents a provider test result
@@ -408,6 +434,7 @@ type NotificationResponse struct {
 	MaxRetries     int                         `json:"maxRetries"`
 	ErrorMessage   string                      `json:"errorMessage,omitempty"`
 	Provider       string                      `json:"provider,omitempty"`
+	ProviderID     *uuid.UUID                  `json:"providerId,omitempty"`
 	ScheduledAt    *time.Time                  `json:"scheduledAt,omitempty"`
 	SentAt         *time.Time                  `json:"sentAt,omitempty"`
 	DeliveredAt    *time.Time                  `json:"deliveredAt,omitempty"`
@@ -495,6 +522,23 @@ type ActionResponse struct {
 	Status  string      `json:"status,omitempty"`
 }
 
+// BulkRetryNotificationsRequest represents a request to retry multiple notifications.
+type BulkRetryNotificationsRequest struct {
+	IDs []string `json:"ids" validate:"required,min=1"`
+}
+
+// BulkRetryNotificationsResponse represents the result of a bulk retry operation.
+type BulkRetryNotificationsResponse struct {
+	Retried int64    `json:"retried"`
+	Skipped int64    `json:"skipped,omitempty"`
+	IDs     []string `json:"ids,omitempty"`
+}
+
+// RetryAllFailedResponse represents the result of retrying all failed notifications.
+type RetryAllFailedResponse struct {
+	Retried int64 `json:"retried"`
+}
+
 // MarkAllAsReadResponse represents the response from marking all notifications as read
 type MarkAllAsReadResponse struct {
 	Message      string    `json:"message"`
@@ -504,31 +548,35 @@ type MarkAllAsReadResponse struct {
 
 // CreateTemplateRequest represents a template creation request
 type CreateTemplateRequest struct {
-	Key              string                  `json:"key"`
-	Name             string                  `json:"name" validate:"required"`
-	Type             models.NotificationType `json:"type" validate:"required"`
-	Locale           string                  `json:"locale"`
-	Subject          string                  `json:"subject"`
-	Body             string                  `json:"body" validate:"required"`
-	Description      string                  `json:"description"`
-	Variables        []string                `json:"variables"`
-	Provider         string                  `json:"provider"`
-	ProviderTemplate string                  `json:"providerTemplate"`
-	IsActive         bool                    `json:"isActive"`
+	Key               string                      `json:"key"`
+	Name              string                      `json:"name"`
+	Type              models.NotificationType     `json:"type"`
+	Locale            string                      `json:"locale"`
+	Subject           string                      `json:"subject"`
+	Body              string                      `json:"body"`
+	Description       string                      `json:"description"`
+	Variables         []string                    `json:"variables"`
+	Provider          string                      `json:"provider"`
+	ProviderTemplate  string                      `json:"providerTemplate"`
+	ProviderTemplates []models.ProviderTemplateMap `json:"providerTemplates"`
+	IsActive          bool                        `json:"isActive"`
 }
 
 // TemplateResponse represents a template response
 type TemplateResponse struct {
-	ID          uuid.UUID               `json:"id"`
-	Key         string                  `json:"key,omitempty"`
-	Name        string                  `json:"name"`
-	Type        models.NotificationType `json:"type"`
-	Locale      string                  `json:"locale"`
-	Subject     string                  `json:"subject,omitempty"`
-	Body        string                  `json:"body"`
-	Description string                  `json:"description,omitempty"`
-	IsActive    bool                    `json:"isActive"`
-	CreatedAt   time.Time               `json:"createdAt"`
+	ID                uuid.UUID                   `json:"id"`
+	Key               string                      `json:"key,omitempty"`
+	Name              string                      `json:"name"`
+	Type              models.NotificationType     `json:"type"`
+	Locale            string                      `json:"locale"`
+	Subject           string                      `json:"subject,omitempty"`
+	Body              string                      `json:"body"`
+	Description       string                      `json:"description,omitempty"`
+	Provider          string                      `json:"provider,omitempty"`
+	ProviderTemplate  string                      `json:"providerTemplate,omitempty"`
+	ProviderTemplates []models.ProviderTemplateMap `json:"providerTemplates,omitempty"`
+	IsActive          bool                        `json:"isActive"`
+	CreatedAt         time.Time                   `json:"createdAt"`
 }
 
 // RenderPreviewRequest represents a request to render a template preview

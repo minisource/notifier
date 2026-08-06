@@ -2,10 +2,10 @@
 
 import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
-import { SectionCard } from '@/components/shared/section-card';
+import { Card, CardContent, CardHeader, CardTitle } from '@minisource/ui';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { ChannelBadge } from '@/components/shared/channel-badge';
-import { Button } from '@/components/ui/button';
+import { Button } from '@minisource/ui';
 import { AlertTriangle, ExternalLink } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/date';
 import { shortId } from '@/lib/utils/format';
@@ -20,45 +20,57 @@ export function DashboardRecentFailures({ failures, deadLetters }: DashboardRece
   const t = useTranslations();
   const params = useParams();
   const router = useRouter();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
 
   const all = [...failures, ...deadLetters.filter(dl => !failures.find(f => f.notificationId === dl.notificationId))]
     .slice(0, 5);
 
   if (all.length === 0) {
     return (
-      <SectionCard title={t('dashboard.recent_failures')} icon={AlertTriangle}>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5" />
+            {t('dashboard.recent_failures')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
         <div className="flex flex-col items-center justify-center py-8">
           <AlertTriangle className="h-8 w-8 text-muted-foreground/40" />
           <p className="mt-2 text-sm text-muted-foreground">{t('dashboard.no_recent_failures')}</p>
         </div>
-      </SectionCard>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <SectionCard
-      title={t('dashboard.recent_failures')}
-      icon={AlertTriangle}
-      action={
-        all.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-auto px-2 text-xs text-muted-foreground"
-            onClick={() => router.push(`/${locale}/notifications?status=failed`)}
-          >
-            {t('dashboard.view_all')} →
-          </Button>
-        )
-      }
-    >
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5" />
+            {t('dashboard.recent_failures')}
+          </CardTitle>
+          {all.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto px-2 text-xs text-muted-foreground"
+              onClick={() => router.push(`/notifications?status=failed`)}
+            >
+              {t('dashboard.view_all')} →
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
       <div className="space-y-1">
         {all.map((failure) => (
           <div
             key={`${failure.notificationId}-${failure.errorCode}`}
             className="flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/40 cursor-pointer"
-            onClick={() => router.push(`/${locale}/notifications/${failure.notificationId}`)}
+            onClick={() => router.push(`/notifications/${failure.notificationId}`)}
           >
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <ChannelBadge channel={failure.channel} size="sm" />
@@ -86,6 +98,7 @@ export function DashboardRecentFailures({ failures, deadLetters }: DashboardRece
           </div>
         ))}
       </div>
-    </SectionCard>
+      </CardContent>
+    </Card>
   );
 }

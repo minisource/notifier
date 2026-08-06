@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"os"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/minisource/go-common/http/middleware"
 	"github.com/minisource/go-common/response"
 	"github.com/minisource/notifier/api/v1/dto"
+	"github.com/minisource/notifier/config"
 	"github.com/minisource/notifier/internal/models"
 	"github.com/minisource/notifier/internal/service"
 )
@@ -35,6 +38,18 @@ func NewMeHandler(
 func (h *MeHandler) getCurrentUserID(c *fiber.Ctx) (uuid.UUID, error) {
 	userIDStr := middleware.GetUserIDFromContext(c)
 	if userIDStr == "" {
+		// When the backend runs with AUTH_ENABLED=false there are no JWT
+		// claims. Fall back to a local user so /me endpoints keep working in
+		// standalone mode (the frontend boots with a local session and the
+		// notifier must keep functioning without the Auth service).
+		if !config.GetConfig().Auth.Enabled {
+			if local := os.Getenv("AUTH_LOCAL_USER_ID"); local != "" {
+				if uid, err := uuid.Parse(local); err == nil {
+					return uid, nil
+				}
+			}
+			return uuid.Nil, nil
+		}
 		return uuid.Nil, fiber.NewError(fiber.StatusUnauthorized, "User not authenticated")
 	}
 	uid, err := uuid.Parse(userIDStr)

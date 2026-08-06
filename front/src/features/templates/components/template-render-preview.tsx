@@ -4,11 +4,11 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   Dialog,  DialogContent, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
+} from '@minisource/ui';
+import { Button } from '@minisource/ui';
+import { Input } from '@minisource/ui';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@minisource/ui';
+import { Badge } from '@minisource/ui';
 import { Play, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 

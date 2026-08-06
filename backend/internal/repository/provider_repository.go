@@ -12,10 +12,10 @@ import (
 type ProviderRepository interface {
 	Create(ctx context.Context, provider *models.Provider) error
 	GetByID(ctx context.Context, id uuid.UUID) (*models.Provider, error)
-	List(ctx context.Context, channel string) ([]*models.Provider, error)
+	List(ctx context.Context, channel string, tenantID *uuid.UUID) ([]*models.Provider, error)
 	Update(ctx context.Context, provider *models.Provider) error
 	Delete(ctx context.Context, id uuid.UUID) error
-	GetPrimaryByChannel(ctx context.Context, channel string) (*models.Provider, error)
+	GetPrimaryByChannel(ctx context.Context, channel string, tenantID *uuid.UUID) (*models.Provider, error)
 }
 
 type providerRepository struct {
@@ -65,15 +65,22 @@ func (r *providerRepository) GetByID(ctx context.Context, id uuid.UUID) (*models
 	return &provider, nil
 }
 
-func (r *providerRepository) List(ctx context.Context, channel string) ([]*models.Provider, error) {
+func (r *providerRepository) List(ctx context.Context, channel string, tenantID *uuid.UUID) ([]*models.Provider, error) {
 	r.logger.Debug(logging.Postgres, logging.Select, "Listing providers", map[logging.ExtraKey]interface{}{
-		"channel": channel,
+		"channel":  channel,
+		"tenantId": tenantID,
 	})
 
 	var providers []*models.Provider
-	query := r.db.WithContext(ctx).Order("priority ASC, name ASC")
+	// Default providers first (per channel), then by ascending priority — this
+	// doubles as the failover order when sending notifications.
+	query := r.db.WithContext(ctx).Order("is_default DESC, priority ASC, name ASC")
 	if channel != "" {
 		query = query.Where("channel = ?", channel)
+	}
+	if tenantID != nil {
+		// A specific tenant sees its own providers plus global (tenant_id IS NULL) ones
+		query = query.Where("tenant_id IS NULL OR tenant_id = ?", *tenantID)
 	}
 	result := query.Find(&providers)
 	if result.Error != nil {
@@ -114,15 +121,19 @@ func (r *providerRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *providerRepository) GetPrimaryByChannel(ctx context.Context, channel string) (*models.Provider, error) {
+func (r *providerRepository) GetPrimaryByChannel(ctx context.Context, channel string, tenantID *uuid.UUID) (*models.Provider, error) {
 	r.logger.Debug(logging.Postgres, logging.Select, "Getting primary provider by channel", map[logging.ExtraKey]interface{}{
-		"channel": channel,
+		"channel":  channel,
+		"tenantId": tenantID,
 	})
 
 	var provider models.Provider
-	result := r.db.WithContext(ctx).
-		Where("channel = ? AND is_primary = ? AND is_enabled = ?", channel, true, true).
-		First(&provider)
+	query := r.db.WithContext(ctx).
+		Where("channel = ? AND is_primary = ? AND is_enabled = ?", channel, true, true)
+	if tenantID != nil {
+		query = query.Where("tenant_id IS NULL OR tenant_id = ?", *tenantID)
+	}
+	result := query.First(&provider)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
 			return nil, nil

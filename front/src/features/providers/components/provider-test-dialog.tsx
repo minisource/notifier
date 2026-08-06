@@ -4,17 +4,18 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   Dialog,  DialogContent, DialogDescription, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
+} from '@minisource/ui';
+import { Button } from '@minisource/ui';
+import { Input } from '@minisource/ui';
+import { Label } from '@minisource/ui';
+import { Textarea } from '@minisource/ui';
+import { Switch } from '@minisource/ui';
+import { Badge } from '@minisource/ui';
 import { AlertTriangle, CheckCircle, Loader2, Server } from 'lucide-react';
 import { ChannelBadge } from '@/components/shared/channel-badge';
 import { toast } from 'sonner';
 import { testProvider } from '../api';
+import { ProviderErrorHelp } from './provider-error-help';
 
 interface Provider {
   id: string;
@@ -35,7 +36,7 @@ export function ProviderTestDialog({ open, onOpenChange, provider }: ProviderTes
   const [body, setBody] = useState('');
   const [dryRun, setDryRun] = useState(true);
   const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState<{ success: boolean; message?: string; error?: string } | null>(null);
+  const [result, setResult] = useState<{ success: boolean; message?: string; error?: string; latencyMs?: number; status?: string } | null>(null);
 
   const handleTest = async () => {
     if (!recipient.trim() && !dryRun) {
@@ -50,20 +51,27 @@ export function ProviderTestDialog({ open, onOpenChange, provider }: ProviderTes
       const response = await testProvider(provider.id, {
         recipient: recipient || undefined,
         body: body || undefined,
+        dryRun,
       });
 
       setResult({
         success: response.success,
+        status: response.status,
+        latencyMs: response.latencyMs,
         message: response.success
           ? `${t('providers.healthy')} — ${provider.name} ${response.message || 'responded successfully'}`
           : undefined,
-        error: !response.success ? (response.message || 'Provider test failed') : undefined,
+        error: !response.success ? (response.message || response.providerResponseSanitized || 'Provider test failed') : undefined,
       });
 
       if (response.success) {
-        toast.success(`${provider.name} ${t('providers.healthy').toLowerCase()}`);
+        toast.success(`${provider.name} ${t('providers.healthy').toLowerCase()}`, {
+          description: response.message || undefined,
+        });
       } else {
-        toast.error(`${provider.name} ${t('providers.degraded').toLowerCase()}`);
+        toast.error(`${provider.name} ${t('providers.degraded').toLowerCase()}`, {
+          description: response.message || response.providerResponseSanitized || undefined,
+        });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Provider test failed';
@@ -158,6 +166,13 @@ export function ProviderTestDialog({ open, onOpenChange, provider }: ProviderTes
               </div>
               {result.message && <p className="mt-1 text-sm text-green-600 dark:text-green-400">{result.message}</p>}
               {result.error && <p className="mt-1 text-sm text-red-600 dark:text-red-300">{result.error}</p>}
+              {result.error && <ProviderErrorHelp message={result.error} provider={provider.name} />}
+              {(result.latencyMs !== undefined || result.status) && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {result.status && <span className="capitalize">{result.status}</span>}
+                  {result.latencyMs !== undefined && <span> · {result.latencyMs}ms</span>}
+                </p>
+              )}
             </div>
           )}
         </div>

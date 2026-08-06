@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/minisource/go-common/common"
 	"github.com/minisource/go-common/logging"
+	"github.com/minisource/go-common/sensitive"
 	pb "github.com/minisource/go-sdk/notifier/proto/notifier/v1"
 	"github.com/minisource/notifier/internal/models"
 	"google.golang.org/grpc/codes"
@@ -276,7 +277,7 @@ func (s *Server) SendSMS(ctx context.Context, req *pb.SendSMSRequest) (*pb.SendS
 	// The handler will map these to provider-specific tokens
 	data := make(map[string]interface{})
 	tokens := req.GetTokens() // Use getter method for proper protobuf deserialization
-	s.logger.Info(logging.General, logging.Api, "gRPC SendSMS received request", map[logging.ExtraKey]interface{}{
+	s.logger.Info(logging.General, logging.Api, "gRPC SendSMS received request", sensitive.LogMap(map[logging.ExtraKey]interface{}{
 		"to":             req.GetTo(),
 		"template":       req.GetTemplate(),
 		"body":           req.GetBody(),
@@ -286,38 +287,38 @@ func (s *Server) SendSMS(ctx context.Context, req *pb.SendSMSRequest) (*pb.SendS
 		"req_Tokens":     req.Tokens,
 		"req_Tokens_nil": req.Tokens == nil,
 		"req_Tokens_len": len(req.Tokens),
-	})
+	}, "tokens", "body", "req_Tokens"))
 
 	for k, v := range tokens {
 		data[k] = v
 	}
 	if len(tokens) > 0 {
-		s.logger.Info(logging.General, logging.Api, "gRPC SendSMS tokens converted to data", map[logging.ExtraKey]interface{}{
+		s.logger.Info(logging.General, logging.Api, "gRPC SendSMS tokens converted to data", sensitive.LogMap(map[logging.ExtraKey]interface{}{
 			"tokensCount": len(tokens),
 			"data":        data,
-		})
+		}, "data"))
 	}
 
 	// If no tokens provided but body is set, use body as "code"
 	body := req.GetBody()
 	if len(data) == 0 && body != "" {
 		data["code"] = body
-		s.logger.Info(logging.General, logging.Api, "gRPC SendSMS using body as code", map[logging.ExtraKey]interface{}{
+		s.logger.Info(logging.General, logging.Api, "gRPC SendSMS using body as code", sensitive.LogMap(map[logging.ExtraKey]interface{}{
 			"body": body,
-		})
+		}, "body"))
 	}
 
 	// CRITICAL: Nest data under "data" key for handler parsing
 	if len(data) > 0 {
 		metadata["data"] = data
-		s.logger.Info(logging.General, logging.Api, "gRPC SendSMS metadata built", map[logging.ExtraKey]interface{}{
+		s.logger.Info(logging.General, logging.Api, "gRPC SendSMS metadata built", sensitive.LogMap(map[logging.ExtraKey]interface{}{
 			"metadata": metadata,
-		})
+		}, "metadata"))
 	} else {
-		s.logger.Warn(logging.General, logging.Api, "gRPC SendSMS no data provided", map[logging.ExtraKey]interface{}{
+		s.logger.Warn(logging.General, logging.Api, "gRPC SendSMS no data provided", sensitive.LogMap(map[logging.ExtraKey]interface{}{
 			"tokens": tokens,
 			"body":   body,
-		})
+		}, "tokens", "body"))
 	}
 
 	// Convert metadata to JSON
@@ -338,14 +339,18 @@ func (s *Server) SendSMS(ctx context.Context, req *pb.SendSMSRequest) (*pb.SendS
 	normalizedPhone := common.NormalizeIranPhone(phone)
 
 	// Create a notification for SMS
+	// Note: idempotency_key is always set to a unique UUID so that retries from the caller
+	// (e.g. auth service's gRPC retry with exponential backoff) don't cause duplicate key violations
+	// on the idx_notif_idempotency_key unique constraint.
 	notification := &models.Notification{
-		UserID:         uuid.New(), // System notification
-		Type:           models.NotificationTypeSMS,
-		Priority:       models.NotificationPriorityNormal,
-		RecipientPhone: normalizedPhone,
-		Body:           body,
-		Metadata:       metadataJSON,
-		Status:         models.NotificationStatusPending,
+		UserID:          uuid.New(), // System notification
+		Type:            models.NotificationTypeSMS,
+		Priority:        models.NotificationPriorityNormal,
+		RecipientPhone:  normalizedPhone,
+		Body:            body,
+		Metadata:        metadataJSON,
+		IdempotencyKey:  uuid.New().String(),
+		Status:          models.NotificationStatusPending,
 	}
 
 	err := s.notifSvc.CreateNotification(ctx, notification)

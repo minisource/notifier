@@ -3,22 +3,28 @@
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useParams, useRouter } from 'next/navigation';
-import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { z } from 'zod';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { SectionCard } from '@/components/shared/section-card';
+import { Button } from '@minisource/ui';
+import { Textarea } from '@minisource/ui';
+import { Label } from '@minisource/ui';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@minisource/ui';
+import { Switch } from '@minisource/ui';
+import { Card, CardContent, CardHeader, CardTitle } from '@minisource/ui';
 import { TemplateKeyCombobox } from './template-key-combobox';
 import { VariablesEditor } from './variables-editor';
 import { useTemplatesForSelect } from '../hooks/use-notifications';
 import { useSendNotification } from '../hooks/use-notifications';
-import { Send, ArrowLeft, Loader2, Calendar, Globe, Layers, Hash } from 'lucide-react';
+import { useAdminProviders } from '@/features/notifier/api/notifier-queries';
+import { Form, FormField, FormInput, FormMessage } from '@minisource/rhf';
+import { Send, ArrowLeft, Loader2, Calendar, Server, CheckCircle2, AlertTriangle, XCircle, RefreshCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { NotificationChannel } from '../types';
+import type { Provider } from '@/features/notifier/api/notifier-types';
+import { SecureUserPicker } from '@/features/test-center/components/secure-user-picker';
+import { useTenants } from '@/features/tenants/hooks/use-tenants';
+import { ALL_TENANTS } from '@/stores/tenant.store';
 
 const channels: { value: NotificationChannel; label: string }[] = [
   { value: 'sms', label: 'SMS' },
@@ -37,15 +43,57 @@ const priorities = [
 
 export function SendNotificationForm() {
   const t = useTranslations();
-  const params = useParams();
   const router = useRouter();
-  const locale = (params?.locale as string) || 'fa';
   const sendMutation = useSendNotification();
   const { data: templates, isLoading: templatesLoading } = useTemplatesForSelect();
+  const { tenants, activeTenant } = useTenants();
+  const [selectedTenantId, setSelectedTenantId] = useState<string>(() =>
+    activeTenant && activeTenant.id !== ALL_TENANTS.id ? activeTenant.id : ALL_TENANTS.id
+  );
+  const { data: providers, isLoading: providersLoading } = useAdminProviders(selectedTenantId);
   const [selectedChannel, setSelectedChannel] = useState<NotificationChannel>('email');
   const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>();
+  const [selectedProviderId, setSelectedProviderId] = useState<string | undefined>();
   const [showScheduling, setShowScheduling] = useState(false);
+
+  // Providers configured for the currently selected channel (backend-driven),
+  // ordered by default/primary first, then priority (this is the failover order
+  // the backend follows when a send fails).
+  const channelProviders = useMemo(
+    () =>
+      (providers || [])
+        .filter((p) => p.channel === selectedChannel)
+        .sort((a, b) => {
+          const aDefault = a.isDefault || a.isPrimary ? 0 : 1;
+          const bDefault = b.isDefault || b.isPrimary ? 0 : 1;
+          if (aDefault !== bDefault) return aDefault - bDefault;
+          return (a.priority ?? 99) - (b.priority ?? 99);
+        }),
+    [providers, selectedChannel]
+  );
+  const enabledChannelProviders = channelProviders.filter((p) => p.isEnabled !== false);
+
+  // Default/primary provider for a given channel (shared by channel change + initial load)
+  const pickDefaultProvider = (channel: NotificationChannel) => {
+    const forChannel = (providers || []).filter((p) => p.channel === channel);
+    const enabled = forChannel.filter((p) => p.isEnabled !== false);
+    return enabled.find((p) => p.isDefault || p.isPrimary) || enabled[0];
+  };
+
+  // Auto-select the channel's default provider exactly once when providers first
+  // arrive. Guarded by a ref so an explicit user choice (including "Auto") is
+  // never overridden afterwards.
+  const didAutoSelectRef = useRef(false);
+  useEffect(() => {
+    if (providersLoading || didAutoSelectRef.current) return;
+    const primary = pickDefaultProvider(selectedChannel);
+    if (primary) {
+      setSelectedProviderId(primary.id);
+      didAutoSelectRef.current = true;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providersLoading, channelProviders]);
 
   // Build dynamic schema based on channel
   const buildSchema = (channel: NotificationChannel) => {
@@ -86,13 +134,22 @@ export function SendNotificationForm() {
       subject: '',
       body: '',
       priority: 'normal',
-      locale: 'fa',
+      locale: 'en',
       scheduledAt: '',
       idempotencyKey: '',
     },
   });
 
-  // Update recipient type when channel changes
+  // Update recipient type + provider when channel changes
+  const handleTenantChange = (value: string) => {
+    setSelectedTenantId(value);
+    // Provider availability depends on the tenant scope — reset the selection
+    // and let the auto-select effect pick the new tenant's default provider.
+    setSelectedProviderId(undefined);
+    didAutoSelectRef.current = false;
+    form.clearErrors();
+  };
+
   const handleChannelChange = (value: string) => {
     const channel = value as NotificationChannel;
     setSelectedChannel(channel);
@@ -109,6 +166,44 @@ export function SendNotificationForm() {
     form.setValue('recipientType', rType);
     form.setValue('recipientValue', '');
     form.clearErrors();
+
+    // Auto-select the channel's default/primary provider if one is configured
+    setSelectedProviderId(pickDefaultProvider(channel)?.id);
+  };
+
+  const handleTemplateChange = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    const tmpl = templates?.find((t) => t.id === templateId);
+    if (!tmpl) return;
+    // Prefill subject/body from the selected template when not already set
+    if (tmpl.body) {
+      form.setValue('body', tmpl.body);
+    }
+    if (tmpl.subject) {
+      form.setValue('subject', tmpl.subject);
+    }
+    // Pre-populate variables editor with the template's declared variables
+    if (tmpl.variables && tmpl.variables.length > 0) {
+      const nextVars: Record<string, string> = {};
+      for (const v of tmpl.variables) nextVars[v] = templateVariables[v] ?? '';
+      setTemplateVariables(nextVars);
+    }
+  };
+
+  // Map backend provider status ('active'|'inactive'|'disabled'|'error') and
+  // statuses ('healthy'|'degraded'|'down') to a consistent visual state.
+  const providerStatus = (p: Provider) => {
+    const status = (p.status || '').toLowerCase();
+    if (p.isEnabled === false || status === 'disabled' || status === 'inactive') {
+      return { label: t('providers.disabled'), className: 'bg-muted text-muted-foreground border-border/60', Icon: XCircle };
+    }
+    if (status === 'error' || status === 'down') {
+      return { label: t('providers.down'), className: 'bg-destructive/10 text-destructive border-destructive/30', Icon: XCircle };
+    }
+    if (status === 'degraded') {
+      return { label: t('providers.degraded'), className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30', Icon: AlertTriangle };
+    }
+    return { label: t('providers.healthy'), className: 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/30', Icon: CheckCircle2 };
   };
 
   const onSubmit = form.handleSubmit(async (data) => {
@@ -118,7 +213,7 @@ export function SendNotificationForm() {
     if (channel === 'sms') recipient.phone = data.recipientValue;
     else if (channel === 'email') recipient.email = data.recipientValue;
     else if (channel === 'in_app') recipient.userId = data.recipientValue;
-    else if (channel === 'push') recipient.deviceToken = data.recipientValue;
+    else if (channel === 'push') recipient.userId = data.recipientValue;
     else if (channel === 'webhook') recipient.webhookUrl = data.recipientValue;
 
     // Only include non-empty recipient fields
@@ -132,10 +227,15 @@ export function SendNotificationForm() {
       recipient: Object.keys(cleanRecipient).length > 0 ? cleanRecipient : undefined,
       subject: data.subject || undefined,
       body: data.body,
-      locale: data.locale || 'fa',
+      locale: data.locale || 'en',
       templateId: selectedTemplateId || undefined,
+      providerId: selectedProviderId || undefined,
       scheduledAt: data.scheduledAt || undefined,
       idempotencyKey: data.idempotencyKey || undefined,
+      // Always send the explicit tenant scope: "all" means global (the backend
+      // maps it to nil and ignores the X-Tenant-Id header), a UUID scopes the
+      // notification to that tenant.
+      tenantId: selectedTenantId,
     };
 
     if (Object.keys(templateVariables).length > 0) {
@@ -144,7 +244,7 @@ export function SendNotificationForm() {
 
     sendMutation.mutate(payload as any, {
       onSuccess: (result) => {
-        router.push(`/${locale}/notifications/${result.id}`);
+        router.push(`/notifications/${result.id}`);
       },
     });
   });
@@ -158,12 +258,41 @@ export function SendNotificationForm() {
   };
 
   return (
-    <form onSubmit={onSubmit} className="space-y-6">
+    <Form form={form} onSubmit={onSubmit} className="space-y-6">
       {/* Channel & Recipient */}
-      <SectionCard title={t('notifications.form.recipient_section')} icon={Send}>
+      <Card><CardHeader><CardTitle>{t('notifications.form.recipient_section')}</CardTitle></CardHeader><CardContent>
+        <div className="space-y-4">
+        {/* Tenant / Project scope — mirrors the provider form so a notification
+            can be sent on behalf of a specific tenant and its tenant-scoped
+            providers are used during delivery. */}
+        <div className="space-y-2">
+          <Label>{t('providers.tenant') || 'Tenant / Project'}</Label>
+          <Select value={selectedTenantId} onValueChange={handleTenantChange}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_TENANTS.id}>
+                {t('providers.tenant_global') || 'All Tenants (Global)'}
+              </SelectItem>
+              {tenants.map((tenant) => (
+                <SelectItem key={tenant.id} value={tenant.id}>
+                  {tenant.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {t('notifications.form.tenant_hint') ||
+              'Choose the tenant/project this notification belongs to. Only providers available to that tenant (its own + global) will be used.'}
+          </p>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>{t('notifications.channel')}</Label>
+          <FormField
+            name="channel"
+            label={t('notifications.channel')}
+            error={form.formState.errors.channel?.message}
+          >
             <Select value={form.watch('channel')} onValueChange={handleChannelChange}>
               <SelectTrigger>
                 <SelectValue />
@@ -174,59 +303,82 @@ export function SendNotificationForm() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>{t('notifications.form.recipient_value')}</Label>
-            <Input
-              placeholder={channelPlaceholders[selectedChannel]}
-              {...form.register('recipientValue')}
-              className={form.formState.errors.recipientValue ? 'border-destructive' : ''}
-            />
-            {form.formState.errors.recipientValue && (
-              <p className="text-xs text-destructive">{form.formState.errors.recipientValue.message}</p>
+            <FormMessage />
+          </FormField>
+          <FormField
+            name="recipientValue"
+            label={t('notifications.form.recipient_value')}
+            error={form.formState.errors.recipientValue?.message}
+            required
+          >
+            {selectedChannel === 'in_app' || selectedChannel === 'push' ? (
+              <SecureUserPicker
+                value={form.watch('recipientValue')}
+                onChange={(userId) => {
+                  form.setValue('recipientValue', userId || '');
+                  form.trigger('recipientValue');
+                }}
+                placeholder={selectedChannel === 'in_app' ? 'Select recipient user...' : 'Select push target user...'}
+              />
+            ) : (
+              <FormInput
+                placeholder={channelPlaceholders[selectedChannel]}
+                {...form.register('recipientValue')}
+              />
             )}
-          </div>
+            <FormMessage />
+          </FormField>
         </div>
-      </SectionCard>
+        </div>
+      </CardContent></Card>
 
       {/* Message Content */}
-      <SectionCard title={t('notifications.form.content_section')} icon={Layers}>
+      <Card><CardHeader><CardTitle>{t('notifications.form.content_section')}</CardTitle></CardHeader><CardContent>
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>{t('notifications.subject')}</Label>
-            <Input
+          <FormField
+            name="subject"
+            label={t('notifications.subject')}
+            error={form.formState.errors.subject?.message}
+          >
+            <FormInput
               placeholder={t('notifications.form.subject_placeholder')}
               {...form.register('subject')}
             />
-          </div>
-          <div className="space-y-2">
-            <Label>{t('notifications.body')} *</Label>
+            <FormMessage />
+          </FormField>
+          <FormField
+            name="body"
+            label={t('notifications.body')}
+            required
+            error={form.formState.errors.body?.message}
+          >
             <Textarea
               placeholder={t('notifications.form.body_placeholder')}
-              rows={4}
+              
               {...form.register('body')}
-              className={form.formState.errors.body ? 'border-destructive' : ''}
+              className={form.formState.errors.body ? 'border-destructive focus-visible:ring-destructive' : ''}
             />
-            {form.formState.errors.body && (
-              <p className="text-xs text-destructive">{form.formState.errors.body.message}</p>
-            )}
-          </div>
+            <FormMessage />
+          </FormField>
         </div>
-      </SectionCard>
+      </CardContent></Card>
 
       {/* Template */}
-      <SectionCard title={t('notifications.template')} icon={Hash}>
+      <Card><CardHeader><CardTitle>{t('notifications.template')}</CardTitle></CardHeader><CardContent>
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>{t('notifications.form.select_template')}</Label>
             <TemplateKeyCombobox
               templates={templates || []}
               value={selectedTemplateId}
-              onChange={(id, _key) => {
-                setSelectedTemplateId(id);
-              }}
+              onChange={handleTemplateChange}
               loading={templatesLoading}
             />
+            {selectedTemplateId && templates?.find((t) => t.id === selectedTemplateId)?.body && (
+              <p className="text-xs text-muted-foreground">
+                {t('notifications.form.template_prefilled')}
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>{t('templates.variables')}</Label>
@@ -236,13 +388,105 @@ export function SendNotificationForm() {
             />
           </div>
         </div>
-      </SectionCard>
+      </CardContent></Card>
+
+      {/* Provider */}
+      <Card><CardHeader><CardTitle>{t('notifications.form.provider_section')}</CardTitle></CardHeader><CardContent>
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label>{t('notifications.form.select_provider')}</Label>
+            <Select
+              value={selectedProviderId ?? 'auto'}
+              onValueChange={(v) => setSelectedProviderId(v === 'auto' ? undefined : v)}
+              disabled={providersLoading}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t('notifications.form.auto_provider')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">{t('notifications.form.auto_failover')}</SelectItem>
+                {channelProviders.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    <span className="flex items-center gap-2">
+                      <Server className="h-3.5 w-3.5 text-muted-foreground" />
+                      {p.name}
+                      {p.isDefault && <span className="text-xs text-muted-foreground">({t('providers.default')})</span>}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {t('notifications.form.provider_hint', { channel: t(`channels.${selectedChannel}`) })}
+            </p>
+          </div>
+
+          {/* Available providers for this channel, straight from the backend */}
+          <div className="space-y-2">
+            <Label>{t('notifications.form.available_providers')}</Label>
+            {providersLoading ? (
+              <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
+            ) : enabledChannelProviders.length === 0 ? (
+              <p className="text-xs text-muted-foreground">{t('notifications.form.no_providers_channel')}</p>
+            ) : (
+              <div className="space-y-2">
+                {/* Failover order indicator */}
+                {enabledChannelProviders.length > 1 && (
+                  <div className="rounded-md border bg-muted/40 px-3 py-2 text-xs">
+                    <p className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                      <RefreshCw className="h-3 w-3" />
+                      {t('notifications.form.failover_order')}:{' '}
+                      {enabledChannelProviders.map((p, idx) => (
+                        <span key={p.id} className="font-semibold text-foreground">
+                          {idx > 0 && <span className="text-muted-foreground/60"> → </span>}
+                          {p.name}
+                        </span>
+                      ))}
+                    </p>
+                    <p className="mt-0.5 text-muted-foreground">{t('notifications.form.failover_hint')}</p>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  {enabledChannelProviders.map((p, idx) => {
+                    const st = providerStatus(p);
+                    const Icon = st.Icon;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setSelectedProviderId(p.id)}
+                        className={cn(
+                          'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                          st.className,
+                          selectedProviderId === p.id && 'ring-2 ring-ring ring-offset-1'
+                        )}
+                        title={`${p.name} — ${st.label}${p.successRate != null ? ` · ${p.successRate}%` : ''}`}
+                      >
+                        <Icon className="h-3 w-3" />
+                        {p.name}
+                        {p.isDefault && <span className="opacity-70">· {t('providers.default')}</span>}
+                        {enabledChannelProviders.length > 1 && (
+                          <span className="opacity-60">· {idx + 1}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent></Card>
 
       {/* Options */}
-      <SectionCard title={t('notifications.form.options_section')} icon={Globe}>
+      <Card><CardHeader><CardTitle>{t('notifications.form.options_section')}</CardTitle></CardHeader><CardContent>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>{t('notifications.priority')}</Label>
+          <FormField
+            name="priority"
+            label={t('notifications.priority')}
+            error={form.formState.errors.priority?.message}
+          >
             <Select value={form.watch('priority')} onValueChange={(v) => form.setValue('priority', v)}>
               <SelectTrigger>
                 <SelectValue />
@@ -255,9 +499,13 @@ export function SendNotificationForm() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>{t('notifications.form.locale')}</Label>
+            <FormMessage />
+          </FormField>
+          <FormField
+            name="locale"
+            label={t('notifications.form.locale')}
+            error={form.formState.errors.locale?.message}
+          >
             <Select value={form.watch('locale')} onValueChange={(v) => form.setValue('locale', v)}>
               <SelectTrigger>
                 <SelectValue />
@@ -267,7 +515,8 @@ export function SendNotificationForm() {
                 <SelectItem value="en">Language: English</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+            <FormMessage />
+          </FormField>
         </div>
 
         <div className="mt-4 flex items-center gap-2">
@@ -277,27 +526,35 @@ export function SendNotificationForm() {
 
         {showScheduling && (
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>{t('notifications.scheduled_at')}</Label>
+            <FormField
+              name="scheduledAt"
+              label={t('notifications.scheduled_at')}
+              error={form.formState.errors.scheduledAt?.message}
+            >
               <div className="relative">
                 <Calendar className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
+                <FormInput
                   type="datetime-local"
                   {...form.register('scheduledAt')}
                   className="pr-10"
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>{t('notifications.form.idempotency_key')}</Label>
-              <Input
+              <FormMessage />
+            </FormField>
+            <FormField
+              name="idempotencyKey"
+              label={t('notifications.form.idempotency_key')}
+              error={form.formState.errors.idempotencyKey?.message}
+            >
+              <FormInput
                 placeholder="optional-unique-key"
                 {...form.register('idempotencyKey')}
               />
-            </div>
+              <FormMessage />
+            </FormField>
           </div>
         )}
-      </SectionCard>
+      </CardContent></Card>
 
       {/* Actions */}
       <div className="flex items-center justify-between gap-4 border-t border-border/50 pt-4">
@@ -327,6 +584,6 @@ export function SendNotificationForm() {
           )}
         </Button>
       </div>
-    </form>
+    </Form>
   );
 }

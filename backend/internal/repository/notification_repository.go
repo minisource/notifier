@@ -61,8 +61,77 @@ type NotificationRepository interface {
 	// BulkUpdateStatus updates status for multiple notification IDs atomically
 	BulkUpdateStatus(ctx context.Context, ids []uuid.UUID, status models.NotificationStatus) error
 
+	// BulkRetry re-queues failed/dead notifications by ID for exactly one more
+	// delivery attempt. It atomically sets status=pending and pins retry_count
+	// to max_retries WITHOUT resetting it to zero, so a manual retry never
+	// grants a fresh automatic-retry budget. Returns the number of rows
+	// actually requeued.
+	BulkRetry(ctx context.Context, ids []uuid.UUID) (int64, error)
+
+	// RetryByID atomically re-queues a single failed/dead notification for one
+	// more attempt (same semantics as BulkRetry). Returns true when a row was
+	// actually updated; false when the notification was not in a retryable
+	// state (or no longer exists) — no full-object Save, so it is safe against
+	// concurrent worker updates.
+	RetryByID(ctx context.Context, id uuid.UUID) (bool, error)
+
+	// GetRetryableIDs returns the subset of the given IDs that are currently
+	// in a manually retryable state (failed/dead). Used to log audit entries
+	// only for notifications that actually qualify for retry.
+	GetRetryableIDs(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error)
+
+	// GetAllRetryableIDs returns up to limit IDs of failed/dead notifications
+	// (newest first) for the "retry all failed" operation.
+	GetAllRetryableIDs(ctx context.Context, limit int) ([]uuid.UUID, error)
+
 	// ListAll retrieves paginated notifications with optional filters (admin list)
 	ListAll(ctx context.Context, filter NotificationListFilter) ([]*models.Notification, int64, error)
+
+	// GetProviderStats aggregates delivery outcomes grouped by provider
+	// (notifications.provider), used to enrich provider health/success-rate UI.
+	GetProviderStats(ctx context.Context) ([]*ProviderStats, error)
+
+	// SetProvider records which provider handled a notification (used after a
+	// send attempt resolves so per-provider stats are accurate).
+	SetProvider(ctx context.Context, id uuid.UUID, provider string) error
+
+	// HoldForPause freezes a delivery into status=held WITHOUT consuming a
+	// retry budget or touching retry_count. It records which pause generation
+	// held it and why. No-op (false, nil) when the notification is already
+	// terminal or already held.
+	HoldForPause(ctx context.Context, id uuid.UUID, pauseVersion int64, reason string) (bool, error)
+	// CountHeld returns the number of deliveries currently held by the pause.
+	CountHeld(ctx context.Context) (int64, error)
+	// CountActive returns the number of deliveries currently executing
+	// (status sending/processing) — the active-attempt count for the pause UI.
+	CountActive(ctx context.Context) (int64, error)
+	// CountHeldRetries returns the number of held deliveries that were frozen
+	// during a retry (retry_count > 0) — the retrying-held count for the UI.
+	CountHeldRetries(ctx context.Context) (int64, error)
+	// ReleaseHeld re-queues up to limit of the oldest held deliveries back to
+	// pending so the poller/worker can resume them (controlled release, no
+	// thundering herd). Returns the number released.
+	ReleaseHeld(ctx context.Context, limit int) (int64, error)
+	// ListHeld returns held deliveries oldest-first (for admin review).
+	ListHeld(ctx context.Context, limit, offset int) ([]*models.Notification, int64, error)
+	// RecoverStuckSending returns notifications stuck in sending/processing
+	// longer than the cutoff back to pending so the DB poller re-enqueues them
+	// after a worker crash (lease recovery). Never consumes retry budget and
+	// never touches held/failed/terminal rows.
+	RecoverStuckSending(ctx context.Context, cutoff time.Time) (int64, error)
+}
+
+// ProviderStats holds per-provider delivery statistics aggregated from the
+// notifications table (grouped by the provider that handled each notification).
+type ProviderStats struct {
+	Provider         string     `gorm:"column:provider"`
+	TotalSent        int64      `gorm:"column:total_sent"`
+	TotalFailed      int64      `gorm:"column:total_failed"`
+	AverageLatencyMs float64    `gorm:"column:avg_latency_ms"`
+	LastSuccessAt    *time.Time `gorm:"column:last_success_at"`
+	LastFailureAt    *time.Time `gorm:"column:last_failure_at"`
+	LastError        string     `gorm:"column:last_error"`
+	SuccessRate      float64    `gorm:"-"`
 }
 
 // NotificationListFilter represents filters for the admin notification list
@@ -255,9 +324,14 @@ func (r *notificationRepository) GetRetryableNotifications(ctx context.Context, 
 	})
 
 	var notifications []*models.Notification
+	// Use `retry_count <= max_retries` (not `<`): the notification must be
+	// re-enqueued one final time when retry_count == max_retries so the worker's
+	// handleFailure can execute its terminal branch (MarkAsDeadLetter → dead).
+	// With `<`, that final attempt was never picked up and notifications stayed
+	// stuck in status=retrying forever after exhausting their retries.
 	result := r.db.WithContext(ctx).
 		Where("status = ?", models.NotificationStatusRetrying).
-		Where("retry_count < max_retries").
+		Where("retry_count <= max_retries").
 		Where("next_retry_at <= ?", time.Now()).
 		Order("priority DESC, next_retry_at ASC").
 		Limit(limit).
@@ -548,6 +622,91 @@ func (r *notificationRepository) BulkUpdateStatus(ctx context.Context, ids []uui
 	return result.Error
 }
 
+// retryUpdateMap is shared by BulkRetry and RetryAllFailed so both paths
+// requeue with identical semantics: status=pending (so the worker/DB poller
+// picks the notification up immediately), retry_count = max_retries (a manual
+// retry grants exactly ONE attempt — never a fresh automatic-retry budget), and
+// next_retry_at cleared (no backoff gate on the manual retry).
+func retryUpdateMap(now time.Time) map[string]interface{} {
+	return map[string]interface{}{
+		"status":        models.NotificationStatusPending,
+		"retry_count":   gorm.Expr("max_retries"),
+		"next_retry_at": nil,
+		"updated_at":    now,
+	}
+}
+
+func (r *notificationRepository) BulkRetry(ctx context.Context, ids []uuid.UUID) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	result := r.db.WithContext(ctx).Model(&models.Notification{}).
+		Where("id IN ?", ids).
+		Where("status IN ?", []models.NotificationStatus{models.NotificationStatusFailed, models.NotificationStatusDead}).
+		Updates(retryUpdateMap(time.Now()))
+	if result.Error != nil {
+		r.logger.Error(logging.Postgres, logging.Update, "Failed to bulk retry notifications", map[logging.ExtraKey]interface{}{
+			"ids":   len(ids),
+			"error": result.Error.Error(),
+		})
+		return 0, result.Error
+	}
+	r.logger.Info(logging.Postgres, logging.Update, "Bulk retried notifications", map[logging.ExtraKey]interface{}{
+		"requested": len(ids),
+		"retried":   result.RowsAffected,
+	})
+	return result.RowsAffected, nil
+}
+
+func (r *notificationRepository) RetryByID(ctx context.Context, id uuid.UUID) (bool, error) {
+	result := r.db.WithContext(ctx).Model(&models.Notification{}).
+		Where("id = ?", id).
+		Where("status IN ?", []models.NotificationStatus{models.NotificationStatusFailed, models.NotificationStatusDead}).
+		Updates(retryUpdateMap(time.Now()))
+	if result.Error != nil {
+		r.logger.Error(logging.Postgres, logging.Update, "Failed to retry notification by id", map[logging.ExtraKey]interface{}{
+			"id":    id,
+			"error": result.Error.Error(),
+		})
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
+func (r *notificationRepository) GetRetryableIDs(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
+	if len(ids) == 0 {
+		return []uuid.UUID{}, nil
+	}
+	var retryable []uuid.UUID
+	result := r.db.WithContext(ctx).Model(&models.Notification{}).
+		Where("id IN ?", ids).
+		Where("status IN ?", []models.NotificationStatus{models.NotificationStatusFailed, models.NotificationStatusDead}).
+		Pluck("id", &retryable)
+	if result.Error != nil {
+		r.logger.Error(logging.Postgres, logging.Select, "Failed to find retryable notification ids", map[logging.ExtraKey]interface{}{
+			"error": result.Error.Error(),
+		})
+		return nil, result.Error
+	}
+	return retryable, nil
+}
+
+func (r *notificationRepository) GetAllRetryableIDs(ctx context.Context, limit int) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	result := r.db.WithContext(ctx).Model(&models.Notification{}).
+		Where("status IN ?", []models.NotificationStatus{models.NotificationStatusFailed, models.NotificationStatusDead}).
+		Order("created_at DESC").
+		Limit(limit).
+		Pluck("id", &ids)
+	if result.Error != nil {
+		r.logger.Error(logging.Postgres, logging.Select, "Failed to list retryable notification ids", map[logging.ExtraKey]interface{}{
+			"error": result.Error.Error(),
+		})
+		return nil, result.Error
+	}
+	return ids, nil
+}
+
 func (r *notificationRepository) ListAll(ctx context.Context, filter NotificationListFilter) ([]*models.Notification, int64, error) {
 	query := r.db.WithContext(ctx).Model(&models.Notification{})
 
@@ -624,6 +783,181 @@ func (r *notificationRepository) ListAll(ctx context.Context, filter Notificatio
 	}
 
 	return notifications, total, nil
+}
+
+func (r *notificationRepository) SetProvider(ctx context.Context, id uuid.UUID, provider string) error {
+	if provider == "" {
+		return nil
+	}
+	result := r.db.WithContext(ctx).Model(&models.Notification{}).
+		Where("id = ?", id).
+		Update("provider", provider)
+	if result.Error != nil {
+		r.logger.Error(logging.Postgres, logging.Update, "Failed to set notification provider", map[logging.ExtraKey]interface{}{
+			"id":       id,
+			"provider": provider,
+			"error":    result.Error.Error(),
+		})
+		return result.Error
+	}
+	return nil
+}
+
+func (r *notificationRepository) GetProviderStats(ctx context.Context) ([]*ProviderStats, error) {
+	const q = `
+SELECT n.provider AS provider,
+       COUNT(*) FILTER (WHERE n.status IN ('sent','delivered')) AS total_sent,
+       COUNT(*) FILTER (WHERE n.status IN ('failed','dead')) AS total_failed,
+       COALESCE(AVG(EXTRACT(EPOCH FROM (n.sent_at - n.created_at)) * 1000), 0) AS avg_latency_ms,
+       MAX(n.sent_at) AS last_success_at,
+       MAX(n.failed_at) AS last_failure_at,
+       (SELECT n2.error_message FROM notifications n2
+         WHERE n2.provider = n.provider AND n2.status IN ('failed','dead')
+         ORDER BY n2.created_at DESC LIMIT 1) AS last_error
+FROM notifications n
+WHERE n.provider IS NOT NULL AND n.provider != ''
+GROUP BY n.provider`
+
+	var rows []*ProviderStats
+	if err := r.db.WithContext(ctx).Raw(q).Scan(&rows).Error; err != nil {
+		r.logger.Error(logging.Postgres, logging.Select, "Failed to aggregate provider stats", map[logging.ExtraKey]interface{}{
+			"error": err.Error(),
+		})
+		return nil, err
+	}
+
+	for _, s := range rows {
+		total := s.TotalSent + s.TotalFailed
+		if total > 0 {
+			s.SuccessRate = float64(s.TotalSent) / float64(total) * 100
+		}
+	}
+	return rows, nil
+}
+
+func (r *notificationRepository) HoldForPause(ctx context.Context, id uuid.UUID, pauseVersion int64, reason string) (bool, error) {
+	if pauseVersion <= 0 {
+		pauseVersion = 1
+	}
+	now := time.Now()
+	result := r.db.WithContext(ctx).Model(&models.Notification{}).
+		Where("id = ?", id).
+		Where("status IN ?", []models.NotificationStatus{
+			models.NotificationStatusPending,
+			models.NotificationStatusQueued,
+			models.NotificationStatusRetrying,
+			models.NotificationStatusProcessing,
+			models.NotificationStatusSending,
+		}).
+		Updates(map[string]interface{}{
+			"status":         models.NotificationStatusHeld,
+			"pause_version":  pauseVersion,
+			"held_reason":    reason,
+			"held_at":        now,
+			"updated_at":     now,
+		})
+	if result.Error != nil {
+		r.logger.Error(logging.Postgres, logging.Update, "Failed to hold notification for pause", map[logging.ExtraKey]interface{}{
+			"id": id, "error": result.Error.Error(),
+		})
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
+func (r *notificationRepository) CountHeld(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.Notification{}).
+		Where("status = ?", models.NotificationStatusHeld).Count(&count).Error
+	return count, err
+}
+
+func (r *notificationRepository) CountActive(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.Notification{}).
+		Where("status IN ?", []models.NotificationStatus{
+			models.NotificationStatusSending,
+			models.NotificationStatusProcessing,
+		}).Count(&count).Error
+	return count, err
+}
+
+func (r *notificationRepository) CountHeldRetries(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.Notification{}).
+		Where("status = ?", models.NotificationStatusHeld).
+		Where("retry_count > 0").Count(&count).Error
+	return count, err
+}
+
+func (r *notificationRepository) ReleaseHeld(ctx context.Context, limit int) (int64, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 50
+	}
+	// Re-queue the OLDEST held deliveries first; they were blocked the longest.
+	result := r.db.WithContext(ctx).Model(&models.Notification{}).
+		Where("id IN (?)",
+			r.db.Model(&models.Notification{}).
+				Select("id").
+				Where("status = ?", models.NotificationStatusHeld).
+				Order("held_at ASC, created_at ASC").
+				Limit(limit),
+		).
+		Updates(map[string]interface{}{
+			"status":        models.NotificationStatusPending,
+			"updated_at":    time.Now(),
+		})
+	if result.Error != nil {
+		r.logger.Error(logging.Postgres, logging.Update, "Failed to release held notifications", map[logging.ExtraKey]interface{}{
+			"error": result.Error.Error(),
+		})
+		return 0, result.Error
+	}
+	return result.RowsAffected, nil
+}
+
+func (r *notificationRepository) ListHeld(ctx context.Context, limit, offset int) ([]*models.Notification, int64, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	var total int64
+	q := r.db.WithContext(ctx).Model(&models.Notification{}).Where("status = ?", models.NotificationStatusHeld)
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var out []*models.Notification
+	err := r.db.WithContext(ctx).Where("status = ?", models.NotificationStatusHeld).
+		Order("held_at ASC, created_at ASC").Limit(limit).Offset(offset).Find(&out).Error
+	return out, total, err
+}
+
+// RecoverStuckSending resets deliveries stuck in sending/processing past the
+// cutoff back to pending (worker-crash lease recovery). Only rows whose
+// updated_at is older than the cutoff are touched, so a genuinely slow
+// provider call is never interrupted; the poller picks them up afterwards.
+func (r *notificationRepository) RecoverStuckSending(ctx context.Context, cutoff time.Time) (int64, error) {
+	result := r.db.WithContext(ctx).Model(&models.Notification{}).
+		Where("status IN ?", []models.NotificationStatus{
+			models.NotificationStatusSending,
+			models.NotificationStatusProcessing,
+		}).
+		Where("updated_at < ?", cutoff).
+		Updates(map[string]interface{}{
+			"status":     models.NotificationStatusPending,
+			"updated_at": time.Now(),
+		})
+	if result.Error != nil {
+		r.logger.Warn(logging.Postgres, logging.Update, "Failed to recover stuck sending notifications", map[logging.ExtraKey]interface{}{
+			"error": result.Error.Error(),
+		})
+		return 0, result.Error
+	}
+	if result.RowsAffected > 0 {
+		r.logger.Info(logging.Postgres, logging.Update, "Recovered stuck sending notifications (lease recovery)", map[logging.ExtraKey]interface{}{
+			"count": result.RowsAffected,
+		})
+	}
+	return result.RowsAffected, nil
 }
 
 func (r *notificationRepository) GetByStatusAndType(ctx context.Context, status models.NotificationStatus, notifType models.NotificationType, limit int) ([]*models.Notification, error) {

@@ -247,7 +247,7 @@ func (s *TemplateService) validateTemplate(template *models.NotificationTemplate
 		return fmt.Errorf("template name is required")
 	}
 
-	if template.Subject == "" && template.Body == "" {
+	if template.Type != "sms" && template.Subject == "" && template.Body == "" {
 		return fmt.Errorf("template must have either subject or body")
 	}
 

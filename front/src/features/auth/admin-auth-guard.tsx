@@ -2,7 +2,7 @@
 
 import { useAdminAuth } from './admin-auth-context';
 import { AdminLoginPage } from './admin-login-page';
-import { LoadingState } from '@/components/shared/loading-state';
+import { LoadingState } from '@minisource/ui';
 
 interface AdminAuthGuardProps {
   children: React.ReactNode;
@@ -12,7 +12,7 @@ export function AdminAuthGuard({ children }: AdminAuthGuardProps) {
   const { state } = useAdminAuth();
 
   if (state.status === 'loading') {
-    return <LoadingState rows={4} columns={2} />;
+    return <LoadingState   />;
   }
 
   if (state.status === 'unauthenticated') {

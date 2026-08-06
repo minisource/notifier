@@ -1,21 +1,43 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
-import { Button } from '@/components/ui/button';
-import { Moon, Sun } from 'lucide-react';
+import { ModeToggle } from '@minisource/ui';
 
+/**
+ * Client-only gate: renders nothing on the server so SSR and first client
+ * render stay identical. Prevents a hydration mismatch flash from the theme
+ * icons (next-themes reports the theme only after mount).
+ */
+function ClientOnly({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return <div className="h-9 w-9" aria-hidden="true" />;
+  }
+
+  return children;
+}
+
+/**
+ * Theme toggle that drives next-themes from THIS app's own context.
+ *
+ * Important: `@minisource/ui` bundles its own `next-themes` copy (resolved
+ * from design-system/node_modules/.pnpm), so calling `useTheme()` inside
+ * ModeToggle reads a DIFFERENT React context than the app's ThemeProvider and
+ * `setTheme` silently no-ops. We therefore pass `theme`/`onToggle` from the
+ * app's own `useTheme` as props — same pattern as auth/front header-controls.
+ */
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-      aria-label="Toggle theme"
-    >
-      <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-    </Button>
+    <ClientOnly>
+      <ModeToggle theme={theme} onToggle={(next) => setTheme(next)} />
+    </ClientOnly>
   );
 }

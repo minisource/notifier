@@ -2,11 +2,11 @@
 
 import { useTranslations } from 'next-intl';
 import { Server, AlertTriangle } from 'lucide-react';
-import { SectionCard } from '@/components/shared/section-card';
+import { Card, CardHeader, CardTitle, CardContent } from '@minisource/ui';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { ChannelBadge } from '@/components/shared/channel-badge';
 import { MiniProgress } from '@/components/shared/mini-progress';
-import { Button } from '@/components/ui/button';
+import { Button } from '@minisource/ui';
 import { useProviders } from '@/features/providers/hooks/use-providers';
 
 export function ProviderHealthPanel() {
@@ -16,18 +16,22 @@ export function ProviderHealthPanel() {
   const degradedCount = providers?.filter(p => p.status === 'inactive' || p.status === 'error').length || 0;
 
   return (
-    <SectionCard
-      title={t('dashboard.provider_health')}
-      icon={Server}
-      action={
-        degradedCount > 0 && (
-          <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-            <AlertTriangle className="h-3 w-3" />
-            <span>{degradedCount} {t('providers.degraded')}</span>
-          </div>
-        )
-      }
-    >
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Server className="h-5 w-5" />
+            {t('dashboard.provider_health')}
+          </CardTitle>
+          {degradedCount > 0 && (
+            <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="h-3 w-3" />
+              <span>{degradedCount} {t('providers.degraded')}</span>
+            </div>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
       {isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -62,6 +66,7 @@ export function ProviderHealthPanel() {
       ) : (
         <p className="text-sm text-muted-foreground">{t('providers.no_providers')}</p>
       )}
-    </SectionCard>
+      </CardContent>
+    </Card>
   );
 }

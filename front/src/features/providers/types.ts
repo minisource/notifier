@@ -2,6 +2,7 @@ export type ProviderStatus = 'active' | 'inactive' | 'disabled' | 'error';
 
 export interface Provider {
   id: string;
+  tenantId?: string;
   name: string;
   channel: string;
   type?: string;
@@ -13,11 +14,16 @@ export interface Provider {
   priority: number;
   config?: Record<string, unknown>;
   successRate?: number;
+  averageLatencyMs?: number;
+  lastSuccessAt?: string;
+  lastFailureAt?: string;
+  lastError?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface CreateProviderInput {
+  tenantId?: string;
   name: string;
   channel: string;
   type?: string;
@@ -30,6 +36,7 @@ export interface CreateProviderInput {
 }
 
 export interface UpdateProviderInput {
+  tenantId?: string;
   name?: string;
   channel?: string;
   type?: string;
@@ -43,10 +50,16 @@ export interface UpdateProviderInput {
 }
 
 export interface ProviderHealthItem {
+  providerId?: string;
   name: string;
   channel: string;
+  type?: string;
   status: string;
   successRate?: number;
+  latencyMs?: number;
+  message?: string;
+  error?: string;
+  checkedAt?: string;
 }
 
 export interface ProviderHealthResponse {

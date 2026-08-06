@@ -11,8 +11,15 @@ function mapDelivery(d: NotifierDelivery): Delivery {
     status: d.status as Delivery['status'],
     attemptCount: d.attemptCount,
     maxAttempts: d.maxAttempts,
-    lastError: d.lastError,
+    // Backend returns lastErrorMessage.
+    lastError: d.lastErrorMessage ?? d.lastError,
     nextRetryAt: d.nextRetryAt,
+    recipientEmail: d.recipientEmail,
+    recipientPhone: d.recipientPhone,
+    recipientId: d.recipientId,
+    subject: d.subject,
+    body: d.body,
+    completedAt: d.completedAt,
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
     attempts: (d.attempts || []).map((a: NotifierAttempt) => ({
@@ -21,16 +28,20 @@ function mapDelivery(d: NotifierDelivery): Delivery {
       attemptNumber: a.attemptNumber,
       status: a.status as Delivery['status'],
       errorMessage: a.errorMessage,
-      providerResponse: a.providerResponse,
-      processingTimeMs: a.processingTimeMs,
+      errorCode: a.errorCode,
+      // Backend returns latencyMs + providerResponseSanitized.
+      providerResponse: a.providerResponseSanitized ?? a.providerResponse,
+      // Backend omits latencyMs when 0, so fall back to 0 to keep the number type honest.
+      processingTimeMs: a.latencyMs ?? a.processingTimeMs ?? 0,
       createdAt: a.createdAt,
+      completedAt: a.completedAt,
     })),
   };
 }
 
 export async function listDeliveries(params?: ListDeliveriesParams): Promise<Delivery[]> {
   const result = await adminDeliveriesApi.list(params as Record<string, string | number | boolean | undefined>);
-  // Backend returns paginated { items: [...], total, ... }; mock returns { data: [...], total, ... }
+  // Backend returns paginated { items: [...], total, ... }
   const items = (result as any).items || (result as any).data || [];
   return items.map(mapDelivery);
 }

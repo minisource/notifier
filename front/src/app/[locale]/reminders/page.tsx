@@ -3,17 +3,16 @@
 import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { PageHeader } from '@/components/shared/page-header';
-import { PageContainer } from '@/components/shared/page-container';
-import { SectionCard } from '@/components/shared/section-card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
+import { PageHeader } from '@minisource/ui';
+import { Card } from '@minisource/ui';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@minisource/ui';
+import { Button } from '@minisource/ui';
 import { ChannelBadge } from '@/components/shared/channel-badge';
 import { StatusBadge } from '@/components/shared/status-badge';
-import { EmptyState } from '@/components/shared/empty-state';
-import { ErrorState } from '@/components/shared/error-state';
-import { TableSkeleton } from '@/components/shared/loading-state';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { EmptyState } from '@minisource/ui';
+import { ErrorState } from '@minisource/ui';
+import { Skeleton } from '@minisource/ui';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@minisource/ui';
 import { useReminders } from '@/features/reminders/hooks/use-reminders';
 import { Plus, Clock, RefreshCw } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/date';
@@ -23,7 +22,7 @@ export default function RemindersPage() {
   const t = useTranslations();
   const params = useParams();
   const router = useRouter();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
 
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -36,21 +35,21 @@ export default function RemindersPage() {
     : [];
 
   return (
-    <PageContainer>
-      <PageHeader title={t('reminders.title')} subtitle={t('reminders.subtitle')}>
+    <div className="space-y-6">
+      <PageHeader title={t('reminders.title')} description={t('reminders.subtitle')}>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={`ml-1.5 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
           {t('dashboard.view_all') as string}
         </Button>
-        <Button size="sm" onClick={() => router.push(`/${locale}/reminders/new`)}>
+        <Button size="sm" onClick={() => router.push(`/reminders/new`)}>
           <Plus className="ml-1.5 h-4 w-4" />
           {t('reminders.schedule')}
         </Button>
       </PageHeader>
 
-      <SectionCard title={t('reminders.title')}>
+      <Card title={t('reminders.title')}>
         {isLoading ? (
-          <TableSkeleton rows={5} columns={5} context="reminders" />
+          <Skeleton className="h-64 w-full" />
         ) : isError ? (
           <ErrorState
             title={t('errors.generic')}
@@ -95,7 +94,7 @@ export default function RemindersPage() {
                       <TableRow
                         key={reminder.id}
                         className="cursor-pointer"
-                        onClick={() => router.push(`/${locale}/reminders/${reminder.id}`)}
+                        onClick={() => router.push(`/reminders/${reminder.id}`)}
                       >
                         <TableCell>
                           <span className="text-sm whitespace-nowrap">
@@ -121,7 +120,7 @@ export default function RemindersPage() {
                           </span>
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="sm" onClick={() => router.push(`/${locale}/reminders/${reminder.id}`)}>
+                          <Button variant="ghost" size="sm" onClick={() => router.push(`/reminders/${reminder.id}`)}>
                             {t('common.view_details') as string} →
                           </Button>
                         </TableCell>
@@ -136,7 +135,7 @@ export default function RemindersPage() {
                 title={t('reminders.no_reminders')}
                 description="Schedule reminders for time-sensitive notifications that need to be sent at a specific date and time."
                 actionLabel={t('reminders.schedule')}
-                onAction={() => router.push(`/${locale}/reminders/new`)}
+                onAction={() => router.push(`/reminders/new`)}
                 tips={[
                   'Reminders can be sent via SMS, Email, or Push',
                   'Use templates for consistent message formatting',
@@ -146,7 +145,7 @@ export default function RemindersPage() {
             )}
           </div>
         )}
-      </SectionCard>
-    </PageContainer>
+      </Card>
+    </div>
   );
 }

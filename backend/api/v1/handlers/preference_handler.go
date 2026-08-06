@@ -3,12 +3,40 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/minisource/go-common/http/middleware"
 	"github.com/minisource/go-common/i18n"
 	"github.com/minisource/go-common/response"
 	"github.com/minisource/notifier/api/v1/dto"
 	"github.com/minisource/notifier/internal/models"
 	"github.com/minisource/notifier/internal/service"
 )
+
+// resolveUserID resolves the userId path param. It accepts "current" (or "me")
+// to mean the authenticated user from the JWT — same semantics as the /me
+// endpoints — otherwise it must be a valid UUID.
+// Returns a *fiber.Error so callers can preserve the status code (401 vs 400).
+func resolveUserID(c *fiber.Ctx) (uuid.UUID, error) {
+	userIDStr := c.Params("userId")
+	if userIDStr == "" || userIDStr == "current" || userIDStr == "me" {
+		userIDStr = middleware.GetUserIDFromContext(c)
+		if userIDStr == "" {
+			return uuid.Nil, fiber.NewError(fiber.StatusUnauthorized, "User not authenticated")
+		}
+	}
+	uid, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return uuid.Nil, fiber.NewError(fiber.StatusBadRequest, "Invalid user ID")
+	}
+	return uid, nil
+}
+
+// userIDError maps a resolveUserID error to the proper response, preserving 401.
+func userIDError(c *fiber.Ctx, err error) error {
+	if fe, ok := err.(*fiber.Error); ok && fe.Code == fiber.StatusUnauthorized {
+		return response.Unauthorized(c, "User not authenticated")
+	}
+	return response.BadRequest(c, "INVALID_USER_ID", "Invalid user ID")
+}
 
 type PreferenceHandler struct {
 	preferenceService *service.PreferenceService
@@ -32,10 +60,9 @@ func NewPreferenceHandler(preferenceService *service.PreferenceService) *Prefere
 // @Failure 400 {object} dto.ErrorResponse
 // @Router /preferences/user/{userId} [get]
 func (h *PreferenceHandler) GetUserPreferences(c *fiber.Ctx) error {
-	userIDStr := c.Params("userId")
-	userID, err := uuid.Parse(userIDStr)
+	userID, err := resolveUserID(c)
 	if err != nil {
-		return response.BadRequest(c, "INVALID_USER_ID", "Invalid user ID")
+		return userIDError(c, err)
 	}
 
 	prefs, err := h.preferenceService.GetUserPreferences(c.Context(), userID)
@@ -67,10 +94,9 @@ func (h *PreferenceHandler) GetUserPreferences(c *fiber.Ctx) error {
 // @Failure 400 {object} dto.ErrorResponse
 // @Router /preferences/user/{userId} [put]
 func (h *PreferenceHandler) UpdatePreference(c *fiber.Ctx) error {
-	userIDStr := c.Params("userId")
-	userID, err := uuid.Parse(userIDStr)
+	userID, err := resolveUserID(c)
 	if err != nil {
-		return response.BadRequest(c, "INVALID_USER_ID", "Invalid user ID")
+		return userIDError(c, err)
 	}
 
 	req := new(dto.UpdatePreferenceRequest)
@@ -124,10 +150,9 @@ func (h *PreferenceHandler) UpdatePreference(c *fiber.Ctx) error {
 // @Failure 400 {object} dto.ErrorResponse
 // @Router /preferences/user/{userId}/channel/{channel} [patch]
 func (h *PreferenceHandler) UpdateChannelPreference(c *fiber.Ctx) error {
-	userIDStr := c.Params("userId")
-	userID, err := uuid.Parse(userIDStr)
+	userID, err := resolveUserID(c)
 	if err != nil {
-		return response.BadRequest(c, "INVALID_USER_ID", "Invalid user ID")
+		return userIDError(c, err)
 	}
 
 	channel := c.Params("channel")
@@ -202,10 +227,9 @@ func (h *PreferenceHandler) UpdateChannelPreference(c *fiber.Ctx) error {
 // @Failure 400 {object} dto.ErrorResponse
 // @Router /preferences/user/{userId}/category/{category} [patch]
 func (h *PreferenceHandler) UpdateCategoryPreference(c *fiber.Ctx) error {
-	userIDStr := c.Params("userId")
-	userID, err := uuid.Parse(userIDStr)
+	userID, err := resolveUserID(c)
 	if err != nil {
-		return response.BadRequest(c, "INVALID_USER_ID", "Invalid user ID")
+		return userIDError(c, err)
 	}
 
 	category := c.Params("category")

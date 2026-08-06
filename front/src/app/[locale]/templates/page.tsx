@@ -3,17 +3,16 @@
 import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { PageHeader } from '@/components/shared/page-header';
-import { PageContainer } from '@/components/shared/page-container';
-import { SectionCard } from '@/components/shared/section-card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
+import { PageHeader } from '@minisource/ui';
+import { Card } from '@minisource/ui';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@minisource/ui';
+import { Button } from '@minisource/ui';
 import { ChannelBadge } from '@/components/shared/channel-badge';
-import { EmptyState } from '@/components/shared/empty-state';
-import { ErrorState } from '@/components/shared/error-state';
-import { TableSkeleton } from '@/components/shared/loading-state';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { EmptyState } from '@minisource/ui';
+import { ErrorState } from '@minisource/ui';
+import { Skeleton } from '@minisource/ui';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@minisource/ui';
+import { ConfirmDialog } from '@minisource/ui';
 import { useTemplates, useDeleteTemplate } from '@/features/templates/hooks/use-templates';
 import { Plus, FileText, RefreshCw, Trash2, Copy, Play } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils/date';
@@ -26,7 +25,7 @@ export default function TemplatesPage() {
   const t = useTranslations();
   const params = useParams();
   const router = useRouter();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
   const isRtl = locale === 'fa';
 
   const [typeFilter, setTypeFilter] = useState('all');
@@ -59,27 +58,27 @@ export default function TemplatesPage() {
     toast.success(t('common.copied') as string);
   };
 
-  const openPreview = (body: string, subject?: string) => {
+  const openPreview = (body: string = '', subject?: string) => {
     const variables = [...new Set(body.match(/\{\{(\w+)\}\}/g)?.map(v => v.slice(2, -2)) || [])];
     setPreviewTemplate({ body, subject, variables });
   };
 
   return (
-    <PageContainer>
-      <PageHeader title={t('templates.title')} subtitle={t('templates.subtitle')}>
+    <div className="space-y-6">
+      <PageHeader title={t('templates.title')} description={t('templates.subtitle')}>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={`ml-1.5 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
           {t('dashboard.view_all') as string}
         </Button>
-        <Button size="sm" onClick={() => router.push(`/${locale}/templates/new`)}>
+        <Button size="sm" onClick={() => router.push(`/templates/new`)}>
           <Plus className="ml-1.5 h-4 w-4" />
           {t('common.create')}
         </Button>
       </PageHeader>
 
-      <SectionCard title={t('templates.title')}>
+      <Card title={t('templates.title')}>
         {isLoading ? (
-          <TableSkeleton rows={5} columns={7} context="templates" />
+          <Skeleton className="h-64 w-full" />
         ) : isError ? (
           <ErrorState
             title={t('errors.generic')}
@@ -134,9 +133,9 @@ export default function TemplatesPage() {
                   </TableHeader>
                   <TableBody>
                     {templates.map((template) => {
-                      const detectedVars = template.body.match(/\{\{(\w+)\}\}/g)?.map(v => v.slice(2, -2)) || [];
+                      const detectedVars = (template.body || '').match(/\{\{(\w+)\}\}/g)?.map(v => v.slice(2, -2)) || [];
                       return (
-                        <TableRow key={template.id} className="cursor-pointer" onClick={() => router.push(`/${locale}/templates/${template.id}`)}>
+                        <TableRow key={template.id} className="cursor-pointer" onClick={() => router.push(`/templates/${template.id}`)}>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -169,7 +168,7 @@ export default function TemplatesPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openPreview(template.body, template.subject)} title={t('templates.render_preview')}>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openPreview(template.body || '', template.subject)} title={t('templates.render_preview')}>
                                 <Play className="h-3.5 w-3.5" />
                               </Button>
                               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleCopyKey(template.key)} title={t('common.copy_id')}>
@@ -192,7 +191,7 @@ export default function TemplatesPage() {
                 title={t('templates.no_templates')}
                 description="Start by creating your first notification template. Templates help you reuse message formats across different channels."
                 actionLabel={t('common.create')}
-                onAction={() => router.push(`/${locale}/templates/new`)}
+                onAction={() => router.push(`/templates/new`)}
                 tips={[
                   'Use template variables like {{name}} for dynamic content',
                   'Create separate templates for each locale (FA / EN)',
@@ -202,7 +201,7 @@ export default function TemplatesPage() {
             )}
           </div>
         )}
-      </SectionCard>
+      </Card>
 
       {/* Delete Confirm */}
       <ConfirmDialog
@@ -226,6 +225,6 @@ export default function TemplatesPage() {
           detectedVariables={previewTemplate.variables}
         />
       )}
-    </PageContainer>
+    </div>
   );
 }

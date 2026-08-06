@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Button } from '@/components/ui/button';
+import { Button } from '@minisource/ui';
 import { CheckCheck } from 'lucide-react';
 
 interface NotificationCenterActionsProps {

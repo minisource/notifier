@@ -2,29 +2,23 @@
 
 import { useTranslations } from 'next-intl';
 import { useState, useEffect } from 'react';
-import { PageHeader } from '@/components/shared/page-header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@minisource/ui';
+import { Card, CardContent, CardHeader, CardTitle } from '@minisource/ui';
+import { Button } from '@minisource/ui';
+import { Badge } from '@minisource/ui';
 import { useTheme } from 'next-themes';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Sun, Moon, Monitor, Globe, Shield, Wifi, Bell, Smartphone, Eye, EyeOff, Settings2, RefreshCw, Loader2, Save, Zap, Gauge } from 'lucide-react';
-import { authAdapter, updateMockInLocalStorage } from '@/shared/auth/auth-adapter';
-import { getRealtimeConfig } from '@/features/notifier/realtime/notifier-realtime-types';
-import { refreshMockSession } from '@/shared/auth/auth-adapter';
+import { Input } from '@minisource/ui';
+import { Label } from '@minisource/ui';
+import { Sun, Moon, Monitor, Globe, User, Smartphone, Settings2, RefreshCw, Loader2, Save, Zap, Gauge } from 'lucide-react';
+import { authAdapter } from '@/shared/auth/auth-adapter';
 import { useNotificationSettings, useUpdateNotificationSettings } from '@/features/settings/hooks/use-settings';
-import { LoadingState } from '@/components/shared/loading-state';
-import { ErrorState } from '@/components/shared/error-state';
+import { LoadingState } from '@minisource/ui';
+import { ErrorState } from '@minisource/ui';
 
 export default function SettingsPage() {
   const t = useTranslations();
   const { theme, setTheme } = useTheme();
   const session = authAdapter.getSession();
-  const realtimeConfig = getRealtimeConfig();
-  const [showDebug, setShowDebug] = useState(false);
-  const [mockRolesInput, setMockRolesInput] = useState(session.roles.join(', '));
-  const [savedRoles, setSavedRoles] = useState(false);
 
   const { data: settings, isLoading, isError, refetch } = useNotificationSettings();
   const updateMutation = useUpdateNotificationSettings();
@@ -49,14 +43,6 @@ export default function SettingsPage() {
       setQuietTz(settings.quietHours?.timezone ?? 'UTC');
     }
   }, [settings]);
-
-  const handleSaveRoles = () => {
-    const roles = mockRolesInput.split(',').map(r => r.trim()).filter(Boolean);
-    refreshMockSession({ roles: roles as any[] });
-    updateMockInLocalStorage({ roles: roles as any[] });
-    setSavedRoles(true);
-    setTimeout(() => setSavedRoles(false), 2000);
-  };
 
   const handleSaveRetryPolicy = () => {
     updateMutation.mutate({
@@ -94,19 +80,59 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('settings.title')} subtitle={t('settings.subtitle')} />
+      <PageHeader title={t('settings.title')} description={t('settings.subtitle')} />
 
-      {isLoading && <LoadingState rows={3} columns={2} />}
+      {isLoading && <LoadingState />}
 
       {isError && (
         <ErrorState
-          message="Failed to load settings from the server. Some features may be limited."
+          message={t('settings.failed_load')}
           onRetry={() => refetch()}
           autoRetrySeconds={30}
         />
       )}
 
       <div className="grid gap-6 md:grid-cols-2">
+        {/* Account */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-4 w-4" />
+              {t('settings.account')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-3 rounded-lg border p-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                {(session.name || session.email || '?').charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{session.name || '—'}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {t('settings.email')}: {session.email || '—'}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {session.roles.length > 0 ? (
+                session.roles.map((role) => (
+                  <Badge key={role} variant={role === 'super_admin' ? 'default' : 'secondary'}>
+                    {role === 'super_admin'
+                      ? t('settings.super_admin')
+                      : role === 'admin'
+                        ? t('settings.admin')
+                        : role === 'operator'
+                          ? t('settings.operator')
+                          : role}
+                  </Badge>
+                ))
+              ) : (
+                <span className="text-xs text-muted-foreground">{t('settings.viewer')}</span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Language */}
         <Card>
           <CardHeader>
@@ -117,15 +143,16 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <Button variant="outline" className="w-full justify-start" onClick={() => {
-              const pathname = window.location.pathname;
-              window.location.href = pathname.replace(/^\/(fa|en)/, '/fa');
+              // Locale is cookie-driven now (URLs are locale-free)
+              document.cookie = `NEXT_LOCALE=fa; path=/; max-age=31536000; samesite=lax`;
+              window.location.reload();
             }}>
               <Globe className="h-4 w-4 ltr:mr-2 rtl:ml-2" />
               فارسی
             </Button>
             <Button variant="outline" className="w-full justify-start" onClick={() => {
-              const pathname = window.location.pathname;
-              window.location.href = pathname.replace(/^\/(fa|en)/, '/en');
+              document.cookie = `NEXT_LOCALE=en; path=/; max-age=31536000; samesite=lax`;
+              window.location.reload();
             }}>
               <Globe className="h-4 w-4 ltr:mr-2 rtl:ml-2" />
               English
@@ -162,7 +189,7 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <RefreshCw className="h-4 w-4" />
-              Retry Policy
+              {t('settings.retry_policy')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -170,19 +197,19 @@ export default function SettingsPage() {
               <>
                 <div className="flex items-center justify-between rounded-lg border p-3">
                   <div>
-                    <p className="text-sm font-medium">Auto Retry</p>
+                    <p className="text-sm font-medium">{t('settings.auto_retry')}</p>
                     <p className="text-xs text-muted-foreground">
-                      {settings.retryPolicy.enabled ? 'Enabled' : 'Disabled'}
+                      {settings.retryPolicy.enabled ? t('settings.enabled') : t('settings.disabled')}
                     </p>
                   </div>
                   <Badge variant={settings.retryPolicy.enabled ? 'default' : 'secondary'}>
-                    {settings.retryPolicy.enabled ? 'Enabled' : 'Disabled'}
+                    {settings.retryPolicy.enabled ? t('settings.enabled') : t('settings.disabled')}
                   </Badge>
                 </div>
 
                 <div className="rounded-lg border p-3 space-y-2">
                   <Label className="text-xs text-muted-foreground">
-                    Max Retry Attempts
+                    {t('settings.max_retry_attempts')}
                   </Label>
                   <div className="flex items-center gap-2">
                     <Input
@@ -194,7 +221,7 @@ export default function SettingsPage() {
                       className="h-8 w-20 text-sm"
                     />
                     <span className="text-xs text-muted-foreground">
-                      Strategy: {settings.retryPolicy.backoffStrategy}
+                      {t('settings.strategy')}: {settings.retryPolicy.backoffStrategy}
                     </span>
                   </div>
                   <Button size="sm" className="mt-2 w-full" onClick={handleSaveRetryPolicy} disabled={updateMutation.isPending}>
@@ -203,7 +230,7 @@ export default function SettingsPage() {
                     ) : (
                       <Save className="h-4 w-4 mr-1" />
                     )}
-                    Save Retry Policy
+                    {t('settings.save_retry_policy')}
                   </Button>
                 </div>
               </>
@@ -216,7 +243,7 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Zap className="h-4 w-4" />
-              Enabled Channels
+              {t('settings.enabled_channels')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -251,7 +278,7 @@ export default function SettingsPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">Loading channel configuration...</p>
+              <p className="text-sm text-muted-foreground">{t('settings.loading_channels')}</p>
             )}
           </CardContent>
         </Card>
@@ -261,7 +288,7 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Gauge className="h-4 w-4" />
-              Rate Limit
+              {t('settings.rate_limit')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -269,19 +296,19 @@ export default function SettingsPage() {
               <>
                 <div className="flex items-center justify-between rounded-lg border p-3">
                   <div>
-                    <p className="text-sm font-medium">Rate Limiting</p>
+                    <p className="text-sm font-medium">{t('settings.rate_limiting')}</p>
                     <p className="text-xs text-muted-foreground">
-                      {settings.rateLimit.enabled ? 'Enabled' : 'Disabled'}
+                      {settings.rateLimit.enabled ? t('settings.enabled') : t('settings.disabled')}
                     </p>
                   </div>
                   <Badge variant={settings.rateLimit.enabled ? 'default' : 'secondary'}>
-                    {settings.rateLimit.enabled ? 'On' : 'Off'}
+                    {settings.rateLimit.enabled ? t('settings.on') : t('settings.off')}
                   </Badge>
                 </div>
 
                 <div className="rounded-lg border p-3 space-y-3">
                   <div>
-                    <Label className="text-xs text-muted-foreground">Per Minute: {ratePerMin}</Label>
+                    <Label className="text-xs text-muted-foreground">{t('settings.per_minute')}: {ratePerMin}</Label>
                     <Input
                       type="number"
                       value={ratePerMin}
@@ -292,7 +319,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Per Hour: {ratePerHour}</Label>
+                    <Label className="text-xs text-muted-foreground">{t('settings.per_hour')}: {ratePerHour}</Label>
                     <Input
                       type="number"
                       value={ratePerHour}
@@ -308,7 +335,7 @@ export default function SettingsPage() {
                     ) : (
                       <Save className="h-4 w-4 mr-1" />
                     )}
-                    Save Rate Limits
+                    {t('settings.save_rate_limits')}
                   </Button>
                 </div>
               </>
@@ -321,7 +348,7 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Moon className="h-4 w-4" />
-              Quiet Hours
+              {t('settings.quiet_hours')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -329,9 +356,9 @@ export default function SettingsPage() {
               <>
                 <div className="flex items-center justify-between rounded-lg border p-3">
                   <div>
-                    <p className="text-sm font-medium">Quiet Hours</p>
+                    <p className="text-sm font-medium">{t('settings.quiet_hours')}</p>
                     <p className="text-xs text-muted-foreground">
-                      {quietEnabled ? 'Notifications will be suppressed during quiet hours' : 'Disabled'}
+                      {quietEnabled ? t('settings.quiet_hours_suppressed') : t('settings.disabled')}
                     </p>
                   </div>
                   <Badge
@@ -339,14 +366,14 @@ export default function SettingsPage() {
                     className="cursor-pointer"
                     onClick={() => setQuietEnabled(!quietEnabled)}
                   >
-                    {quietEnabled ? 'On' : 'Off'}
+                    {quietEnabled ? t('settings.on') : t('settings.off')}
                   </Badge>
                 </div>
 
                 <div className="rounded-lg border p-3 space-y-3">
                   <div className="flex items-center gap-2">
                     <div className="flex-1">
-                      <Label className="text-xs text-muted-foreground">Start</Label>
+                      <Label className="text-xs text-muted-foreground">{t('settings.start')}</Label>
                       <Input
                         type="time"
                         value={quietStart}
@@ -355,7 +382,7 @@ export default function SettingsPage() {
                       />
                     </div>
                     <div className="flex-1">
-                      <Label className="text-xs text-muted-foreground">End</Label>
+                      <Label className="text-xs text-muted-foreground">{t('settings.end')}</Label>
                       <Input
                         type="time"
                         value={quietEnd}
@@ -365,7 +392,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div>
-                    <Label className="text-xs text-muted-foreground">Timezone</Label>
+                    <Label className="text-xs text-muted-foreground">{t('settings.timezone')}</Label>
                     <Input
                       type="text"
                       value={quietTz}
@@ -380,12 +407,12 @@ export default function SettingsPage() {
                     ) : (
                       <Save className="h-4 w-4 mr-1" />
                     )}
-                    Save Quiet Hours
+                    {t('settings.save_quiet_hours')}
                   </Button>
                 </div>
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">Loading quiet hours configuration...</p>
+              <p className="text-sm text-muted-foreground">{t('settings.loading_quiet_hours')}</p>
             )}
           </CardContent>
         </Card>
@@ -395,7 +422,7 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings2 className="h-4 w-4" />
-              Data Retention
+              {t('settings.data_retention')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -403,7 +430,7 @@ export default function SettingsPage() {
               <>
                 <div className="rounded-lg border p-3 space-y-2">
                   <Label className="text-xs text-muted-foreground">
-                    Retention Period
+                    {t('settings.retention_period')}
                   </Label>
                   <div className="flex items-center gap-2">
                     <Input
@@ -414,7 +441,9 @@ export default function SettingsPage() {
                       max={365}
                       className="h-8 w-24 text-sm"
                     />
-                    <span className="text-xs text-muted-foreground">days (~{Math.round(retentionDays / 30)} months)</span>
+                    <span className="text-xs text-muted-foreground">
+                      {t('settings.days_approx', { months: Math.round(retentionDays / 30) })}
+                    </span>
                   </div>
                   <Button size="sm" className="mt-2 w-full" onClick={handleSaveRetention} disabled={updateMutation.isPending}>
                     {updateMutation.isPending ? (
@@ -422,99 +451,11 @@ export default function SettingsPage() {
                     ) : (
                       <Save className="h-4 w-4 mr-1" />
                     )}
-                    Save Retention
+                    {t('settings.save_retention')}
                   </Button>
                 </div>
               </>
             )}
-          </CardContent>
-        </Card>
-
-        {/* API + Realtime */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Wifi className="h-4 w-4" />
-              {t('settings.api_mode')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div>
-                <p className="text-sm font-medium">{t('settings.api_mode')}</p>
-                <p className="text-xs text-muted-foreground">
-                  {process.env.NEXT_PUBLIC_API_MODE === 'mock' ? t('settings.mock') : t('settings.real')}
-                </p>
-              </div>
-              <Badge variant={process.env.NEXT_PUBLIC_API_MODE === 'mock' ? 'secondary' : 'default'}>
-                {process.env.NEXT_PUBLIC_API_MODE === 'mock' ? t('settings.mock') : t('settings.real')}
-              </Badge>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div>
-                <p className="text-sm font-medium">{t('settings.backend_url')}</p>
-                <p className="text-xs text-muted-foreground break-all">
-                  {process.env.NEXT_PUBLIC_NOTIFIER_API_URL || 'http://localhost:9002/v1'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div className="flex items-center gap-2">
-                <Bell className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">{t('notifier.realtime.title') || 'Realtime'}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {t('notifier.realtime.mode') || 'Mode'}: {realtimeConfig.mode}
-                    {realtimeConfig.mode === 'polling' && ` (${realtimeConfig.pollIntervalMs / 1000}s interval)`}
-                  </p>
-                </div>
-              </div>
-              <Badge variant="outline">{realtimeConfig.mode}</Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Mock Session */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-4 w-4" />
-              {t('settings.role')} — Mock Session
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div>
-                <p className="text-sm font-medium">{t('settings.role')}</p>
-                <p className="text-xs text-muted-foreground">{session.roles.join(', ') || 'none'}</p>
-              </div>
-              <Badge variant="secondary">
-                {session.roles.includes('admin') ? t('settings.admin') : session.roles.includes('operator') ? t('settings.operator') : t('settings.viewer')}
-              </Badge>
-            </div>
-            <div className="rounded-lg border p-3 space-y-2">
-              <Label className="text-xs text-muted-foreground">Mock Roles (comma-separated)</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={mockRolesInput}
-                  onChange={(e) => setMockRolesInput(e.target.value)}
-                  placeholder="admin, operator, user"
-                  className="text-sm h-8"
-                  aria-label="Mock roles"
-                />
-                <Button size="sm" className="h-8" onClick={handleSaveRoles}>
-                  {savedRoles ? t('common.copied') || 'Saved' : t('common.save')}
-                </Button>
-              </div>
-            </div>
-            <div className="rounded-lg border p-3">
-              <p className="text-xs text-muted-foreground">
-                User ID: <code className="font-mono text-[10px]">{session.userId || 'none'}</code>
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Tenant: <code className="font-mono text-[10px]">{session.tenantId || 'none'}</code>
-              </p>
-            </div>
           </CardContent>
         </Card>
 
@@ -535,30 +476,9 @@ export default function SettingsPage() {
             </div>
             <div className="rounded-lg border p-3">
               <p className="text-xs text-muted-foreground">
-                App: {process.env.NEXT_PUBLIC_APP_NAME || 'Notifier Admin'} v{process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0'}
+                {t('settings.version')}: {process.env.NEXT_PUBLIC_APP_NAME || 'Notifier Admin'} v{process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0'}
               </p>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Debug */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Eye className="h-4 w-4" />
-              {t('notifier.settings.debug') || 'Debug'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" size="sm" className="w-full justify-start gap-2" onClick={() => setShowDebug(!showDebug)}>
-              {showDebug ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              {showDebug ? 'Hide Debug Info' : 'Show Debug Info'}
-            </Button>
-            {showDebug && (
-              <pre className="mt-3 rounded-lg bg-muted p-3 text-xs font-mono overflow-auto max-h-48">
-{JSON.stringify({ session, realtimeConfig, env: { API_MODE: process.env.NEXT_PUBLIC_API_MODE, API_URL: process.env.NEXT_PUBLIC_NOTIFIER_API_URL, USE_MOCKS: process.env.NEXT_PUBLIC_NOTIFIER_USE_MOCKS } }, null, 2)}
-              </pre>
-            )}
           </CardContent>
         </Card>
       </div>

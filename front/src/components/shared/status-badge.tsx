@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 interface StatusBadgeProps {
@@ -31,11 +32,24 @@ const statusConfig: Record<string, { dot: string; bg: string; label?: string }> 
   degraded:   { dot: 'bg-amber-500', bg: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400' },
   down:       { dot: 'bg-red-500', bg: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400' },
   disabled:   { dot: 'bg-gray-400', bg: 'bg-gray-50 text-gray-600 dark:bg-gray-900/40 dark:text-gray-400' },
+  // Provider attempt lifecycle statuses
+  preparing:  { dot: 'bg-blue-500', bg: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400' },
+  accepted:   { dot: 'bg-emerald-500', bg: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' },
+  rejected:   { dot: 'bg-rose-500', bg: 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400' },
+  timed_out:  { dot: 'bg-orange-500', bg: 'bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400' },
+  bounced:    { dot: 'bg-rose-500', bg: 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400' },
+  complained: { dot: 'bg-purple-500', bg: 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400' },
+  unknown:    { dot: 'bg-gray-400', bg: 'bg-gray-50 text-gray-600 dark:bg-gray-900/40 dark:text-gray-400' },
 };
 
 export function StatusBadge({ status, className, showDot = true, size = 'sm' }: StatusBadgeProps) {
-  const config = statusConfig[status.toLowerCase()] || { dot: 'bg-gray-400', bg: 'bg-gray-50 text-gray-600 dark:bg-gray-900/40 dark:text-gray-400' };
+  const t = useTranslations('statuses');
+  const key = status.toLowerCase();
+  const config = statusConfig[key] || { dot: 'bg-gray-400', bg: 'bg-gray-50 text-gray-600 dark:bg-gray-900/40 dark:text-gray-400' };
   const sizeClasses = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm';
+  // Localized label when a translation key exists (e.g. "dead" → "بن‌بست ارسال"),
+  // otherwise fall back to the raw status value.
+  const label = t.has(key) ? t(key) : status;
 
   return (
     <span className={cn(
@@ -45,7 +59,7 @@ export function StatusBadge({ status, className, showDot = true, size = 'sm' }: 
       className
     )}>
       {showDot && <span className={cn('h-1.5 w-1.5 rounded-full', config.dot)} />}
-      {status}
+      {label}
     </span>
   );
 }

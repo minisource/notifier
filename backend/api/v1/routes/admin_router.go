@@ -10,6 +10,10 @@ func Admin(router fiber.Router, handler *handlers.AdminHandler) {
 	router.Get("/notifications", handler.ListAllNotifications)
 	router.Post("/notifications", handler.CreateNotification)
 	router.Post("/notifications/read-all", handler.ReadAllNotifications)
+	// Static routes must be registered before the :notificationId param route
+	// so /notifications/retry and /notifications/retry-failed are not swallowed.
+	router.Post("/notifications/retry", handler.BulkRetryNotifications)
+	router.Post("/notifications/retry-failed", handler.RetryAllFailed)
 	router.Get("/notifications/:notificationId", handler.GetNotificationByID)
 	router.Post("/notifications/:notificationId/retry", handler.RetryNotification)
 	router.Post("/notifications/:notificationId/cancel", handler.CancelNotification)

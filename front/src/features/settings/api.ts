@@ -34,11 +34,11 @@ export interface NotificationSettings {
 }
 
 export async function fetchNotificationSettings(): Promise<NotificationSettings> {
-  return http.get<NotificationSettings>('/admin/settings/notifications');
+  return http.get<NotificationSettings>('/admin/notifications/settings/notifications');
 }
 
 export async function updateNotificationSettings(
   input: Partial<NotificationSettings>,
 ): Promise<NotificationSettings> {
-  return http.patch<NotificationSettings>('/admin/settings/notifications', input);
+  return http.patch<NotificationSettings>('/admin/notifications/settings/notifications', input);
 }

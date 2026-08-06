@@ -6,9 +6,11 @@ export interface DeliveryAttempt {
   attemptNumber: number;
   status: DeliveryStatus;
   errorMessage?: string;
+  errorCode?: string;
   providerResponse?: string;
   processingTimeMs: number;
   createdAt: string;
+  completedAt?: string;
 }
 
 export interface Delivery {
@@ -21,6 +23,12 @@ export interface Delivery {
   maxAttempts: number;
   lastError?: string;
   nextRetryAt?: string;
+  recipientEmail?: string;
+  recipientPhone?: string;
+  recipientId?: string;
+  subject?: string;
+  body?: string;
+  completedAt?: string;
   createdAt: string;
   updatedAt: string;
   attempts: DeliveryAttempt[];

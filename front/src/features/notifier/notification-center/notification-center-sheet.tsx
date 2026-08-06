@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@minisource/ui';
 import { NotificationCenterList } from './notification-center-list';
 import type { Notification } from '@/features/notifier/api/notifier-types';
 

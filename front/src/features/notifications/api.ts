@@ -59,19 +59,28 @@ function mapDelivery(d: NotifierDelivery): NotificationDelivery {
     status: d.status as NotificationDelivery['status'],
     attemptCount: d.attemptCount,
     maxAttempts: d.maxAttempts,
-    lastError: d.lastError,
+    // Backend returns lastErrorMessage.
+    lastError: d.lastErrorMessage ?? d.lastError,
     nextRetryAt: d.nextRetryAt,
+    recipientEmail: d.recipientEmail,
+    recipientPhone: d.recipientPhone,
+    recipientId: d.recipientId,
+    subject: d.subject,
+    body: d.body,
+    completedAt: d.completedAt,
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
-    attempts: d.attempts.map((a: NotifierAttempt): DeliveryAttempt => ({
+    attempts: (d.attempts || []).map((a: NotifierAttempt): DeliveryAttempt => ({
       id: a.id,
       deliveryId: a.deliveryId,
       attemptNumber: a.attemptNumber,
       status: a.status as DeliveryAttempt['status'],
       errorMessage: a.errorMessage,
       errorCode: a.errorCode,
-      providerResponse: a.providerResponse,
-      processingTimeMs: a.processingTimeMs,
+      // Backend returns latencyMs + providerResponseSanitized.
+      providerResponse: a.providerResponseSanitized ?? a.providerResponse,
+      // Backend omits latencyMs when 0, so fall back to 0 to keep the number type honest.
+      processingTimeMs: a.latencyMs ?? a.processingTimeMs ?? 0,
       createdAt: a.createdAt,
       completedAt: a.completedAt,
     })),
@@ -113,6 +122,7 @@ export async function sendNotification(input: SendNotificationInput): Promise<No
     metadata: input.metadata as Record<string, unknown>,
     variables: input.variables,
     idempotencyKey: input.idempotencyKey,
+    tenantId: input.tenantId,
     providerId: input.providerId,
   };
   const result = await adminNotificationsApi.create(notifierInput);
@@ -129,6 +139,14 @@ export async function sendBatchNotifications(input: SendBatchNotificationInput):
 export async function retryNotification(id: string): Promise<Notification> {
   const result = await adminNotificationsApi.retry(id);
   return mapNotification(result);
+}
+
+export async function retryNotifications(ids: string[]): Promise<{ retried: number; skipped?: number }> {
+  return adminNotificationsApi.retryMany(ids);
+}
+
+export async function retryAllFailed(): Promise<{ retried: number }> {
+  return adminNotificationsApi.retryAllFailed();
 }
 
 export async function cancelNotification(id: string): Promise<void> {
@@ -148,10 +166,10 @@ export async function getNotificationDeliveries(notificationId: string): Promise
   return (deliveries || []).map(mapDelivery);
 }
 
-export async function getTemplatesForSelect(): Promise<Array<{ id: string; key?: string; name: string; type: string; locale: string }>> {
+export async function getTemplatesForSelect(): Promise<Array<{ id: string; key?: string; name: string; type: string; locale: string; subject?: string; body?: string; variables?: string[] }>> {
   const { adminTemplatesApi } = await import('@/features/notifier/api/notifier-api-mode');
   const result = await adminTemplatesApi.list();
-  // Backend returns paginated { items: [...], total, ... }; mock returns array
+  // Backend returns paginated { items: [...], total, ... }
   const templates = Array.isArray(result) ? result : (result as any).items || [];
   return templates.map((t: NotifierTemplate) => ({
     id: t.id,
@@ -159,5 +177,8 @@ export async function getTemplatesForSelect(): Promise<Array<{ id: string; key?:
     name: t.name,
     type: t.type,
     locale: t.locale,
+    subject: t.subject,
+    body: t.body,
+    variables: t.variables,
   }));
 }

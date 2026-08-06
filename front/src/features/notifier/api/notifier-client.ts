@@ -1,20 +1,26 @@
 import { http } from '@/shared/api/http-client';
 import type {
   PaginatedResponse, Notification, ListNotificationsParams,
-  NotificationDelivery, DeliveryAttempt, Provider, ProviderHealth,
-  ProviderTestInput, Template, CreateTemplateInput, UpdateTemplateInput,
+  NotificationDelivery, DeliveryAttempt, Provider, ProviderHealthResponse,
+  ProviderTestInput, ProviderTestResult, Template, CreateTemplateInput, UpdateTemplateInput,
   RenderPreviewInput, Reminder, CreateReminderInput, UpdateReminderInput,
   CreateNotificationInput,
   DashboardOverview, ObservabilityHealth, ReadinessResult,
   ObservabilityMetrics, QueueOverview, WorkerOverview,
-  Tenant, PreferenceResponse,
+  PreferenceResponse,
+  ProviderAttemptSummary, ProviderAttemptDetails, ProviderAttemptEvent,
+  ListProviderAttemptsParams, ProviderAttemptListResponse,
+  ProviderAccountHealthSummary, ProviderBalanceDetail, ProviderBalanceSettings,
+  BalanceRefreshResult, CreditAlert,
+  DeliveryControlStatus, DeliveryControlEvent, HeldDeliveriesResponse,
+  PauseDeliveriesInput, ResumeDeliveriesInput,
 } from './notifier-types';
 
 // ==================== Admin Dashboard ====================
 
 export const adminDashboardApi = {
   getOverview: (params?: { tenantId?: string; projectId?: string; from?: string; to?: string }) =>
-    http.get<DashboardOverview>('/admin/dashboard/overview', { params }),
+    http.get<DashboardOverview>('/admin/notifications/dashboard/overview', { params }),
 
   getHealth: () =>
     http.get<ObservabilityHealth>('/admin/observability/health'),
@@ -46,6 +52,12 @@ export const adminNotificationsApi = {
 
   retry: (id: string) =>
     http.post<Notification>(`/admin/notifications/${id}/retry`),
+
+  retryMany: (ids: string[]) =>
+    http.post<{ retried: number; skipped?: number }>('/admin/notifications/retry', { ids }),
+
+  retryAllFailed: () =>
+    http.post<{ retried: number }>('/admin/notifications/retry-failed'),
 
   cancel: (id: string) =>
     http.post<void>(`/admin/notifications/${id}/cancel`),
@@ -85,16 +97,16 @@ export const adminDeliveriesApi = {
 // ==================== Admin Providers ====================
 
 export const adminProvidersApi = {
-  list: () =>
-    http.get<Provider[]>('/admin/providers'),
+  list: (params?: { tenantId?: string }) =>
+    http.get<Provider[]>('/admin/providers', { params: params as Record<string, string | number | boolean | undefined> | undefined }),
 
   get: (id: string) =>
     http.get<Provider>(`/admin/providers/${id}`),
 
-  create: (input: { name: string; channel: string; type?: string; config?: Record<string, unknown> }) =>
+  create: (input: { tenantId?: string; name: string; channel: string; type?: string; config?: Record<string, unknown> }) =>
     http.post<Provider>('/admin/providers', input),
 
-  update: (id: string, input: { name?: string; channel?: string; type?: string; config?: Record<string, unknown>; priority?: number }) =>
+  update: (id: string, input: { tenantId?: string; name?: string; channel?: string; type?: string; config?: Record<string, unknown>; priority?: number }) =>
     http.put<Provider>(`/admin/providers/${id}`, input),
 
   delete: (id: string) =>
@@ -104,13 +116,64 @@ export const adminProvidersApi = {
     http.patch<Provider>(`/admin/providers/${id}/status`, { isEnabled }),
 
   getHealth: () =>
-    http.get<ProviderHealth[]>('/admin/providers/health'),
+    http.get<ProviderHealthResponse>('/admin/providers/health'),
+
+  healthCheckAll: () =>
+    http.post<ProviderHealthResponse>('/admin/providers/health-check'),
 
   setDefault: (id: string, isDefault: boolean) =>
     http.patch<Provider>(`/admin/providers/${id}/default`, { isDefault }),
 
   test: (id: string, input?: ProviderTestInput) =>
-    http.post<{ success: boolean; message?: string }>(`/admin/providers/${id}/test`, input),
+    http.post<ProviderTestResult>(`/admin/providers/${id}/test`, input),
+};
+
+// ==================== Admin Global Delivery Control (Pause / Emergency Freeze) ====================
+
+export const adminDeliveryControlApi = {
+  getStatus: () =>
+    http.get<DeliveryControlStatus>('/admin/delivery-control/status'),
+
+  // Idempotency-Key makes repeated clicks / browser retries return the
+  // original result instead of a duplicate transition. ExpectedVersion is
+  // carried in the payload; a stale version returns 409 (no last-write-wins).
+  pause: (input: PauseDeliveriesInput, idempotencyKey?: string) =>
+    http.post<DeliveryControlStatus>('/admin/delivery-control/pause', input, {
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    }),
+
+  resume: (input?: ResumeDeliveriesInput, idempotencyKey?: string) =>
+    http.post<DeliveryControlStatus>('/admin/delivery-control/resume', input ?? {}, {
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    }),
+
+  getHistory: (params?: { limit?: number }) =>
+    http.get<DeliveryControlEvent[]>('/admin/delivery-control/history', { params: params as Record<string, string | number | undefined> | undefined }),
+
+  getHeld: (params?: { page?: number; pageSize?: number }) =>
+    http.get<HeldDeliveriesResponse>('/admin/delivery-control/held', { params: params as Record<string, string | number | undefined> | undefined }),
+};
+
+// ==================== Admin Provider Balance / Quota ====================
+
+export const adminProviderBalanceApi = {
+  listHealth: () =>
+    http.get<ProviderAccountHealthSummary[]>('/admin/providers/balance'),
+
+  getDetail: (id: string) =>
+    http.get<ProviderBalanceDetail>(`/admin/providers/${id}/balance`),
+
+  refresh: (id: string) =>
+    http.post<BalanceRefreshResult>(`/admin/providers/${id}/balance/refresh`),
+
+  updateSettings: (id: string, settings: ProviderBalanceSettings) =>
+    http.put<ProviderBalanceSettings>(`/admin/providers/${id}/balance/settings`, settings),
+
+  listAlerts: (params?: { status?: string; providerId?: string }) =>
+    http.get<CreditAlert[]>('/admin/providers/balance/alerts', { params: params as Record<string, string | undefined> }),
+
+  acknowledgeAlert: (alertId: string) =>
+    http.post<CreditAlert>(`/admin/providers/balance/alerts/${alertId}/acknowledge`),
 };
 
 // ==================== Admin Templates ====================
@@ -169,12 +232,24 @@ export const adminRemindersApi = {
     http.post<Reminder>(`/admin/reminders/${id}/cancel`),
 };
 
-// ==================== Admin Tenants ====================
+// ==================== Admin Provider Attempts (request lifecycle logs) ====================
 
-export const adminTenantsApi = {
-  list: () =>
-    http.get<Tenant[]>('/admin/tenants'),
+export const adminProviderAttemptsApi = {
+  list: (params?: ListProviderAttemptsParams) =>
+    http.get<ProviderAttemptListResponse>('/admin/attempts', { params: params as Record<string, string | number | boolean | undefined> | undefined }),
+
+  get: (id: string) =>
+    http.get<ProviderAttemptDetails>(`/admin/attempts/${id}`),
+
+  getEvents: (id: string) =>
+    http.get<ProviderAttemptEvent[]>(`/admin/attempts/${id}/events`),
+
+  listByNotification: (notificationId: string) =>
+    http.get<ProviderAttemptSummary[]>(`/admin/notifications/${notificationId}/attempts`),
 };
+
+// NOTE: Tenants are owned by the Auth service. The Notifier reads them from
+// GET /users/me/tenants (see features/tenants/api.ts) and never manages them.
 
 // ==================== Admin Preferences ====================
 

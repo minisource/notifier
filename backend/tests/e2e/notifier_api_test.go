@@ -38,8 +38,3 @@ func TestNotifier_API(t *testing.T) {
 		{Name: "notifications_user", Method: http.MethodGet, Path: "/api/v1/notifications/user/" + userID, Headers: svcH, WantCode: []int{http.StatusOK, http.StatusUnauthorized, http.StatusForbidden}},
 	})
 }
-
-func TestNotifier_MockSMSProvider(t *testing.T) {
-	// Unit-level mock SMS is in internal/platform/sms; run: go test ./internal/platform/sms/ -run Mock
-	t.Log("mock SMS provider: go test ./internal/platform/sms/ -run TestMockSMSProvider")
-}

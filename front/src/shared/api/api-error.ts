@@ -12,23 +12,29 @@ export class ApiError extends Error {
   public readonly code: string;
   public readonly requestId?: string;
   public readonly details?: unknown;
+  /** Seconds the server asked the client to wait before retrying (429). */
+  public readonly retryAfter?: number;
 
-  constructor(status: number, code: string, message: string, requestId?: string, details?: unknown) {
+  constructor(status: number, code: string, message: string, requestId?: string, details?: unknown, retryAfter?: number) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.requestId = requestId;
     this.details = details;
+    this.retryAfter = retryAfter;
   }
 
   static fromResponse(response: Response, body: ApiErrorResponse): ApiError {
+    const retryAfterHeader = response.headers?.get('Retry-After');
+    const retryAfter = retryAfterHeader ? Number.parseInt(retryAfterHeader, 10) : undefined;
     return new ApiError(
       response.status,
       body.error?.code || 'UNKNOWN_ERROR',
       body.error?.message || response.statusText || 'Unknown error',
       body.requestId,
       body.error?.details,
+      Number.isFinite(retryAfter) && (retryAfter as number) > 0 ? retryAfter : undefined,
     );
   }
 
@@ -38,6 +44,14 @@ export class ApiError extends Error {
 
   static timeout(): ApiError {
     return new ApiError(0, 'TIMEOUT', 'Request timed out');
+  }
+
+  static unauthorized(message: string): ApiError {
+    return new ApiError(401, 'UNAUTHORIZED', message);
+  }
+
+  static forbidden(message: string): ApiError {
+    return new ApiError(403, 'FORBIDDEN', message);
   }
 
   isClientError(): boolean {

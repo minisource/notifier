@@ -1,6 +1,6 @@
 'use client';
 
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@minisource/ui';
 
 interface NotificationCenterSkeletonProps {
   count?: number;
@@ -13,13 +13,13 @@ export function NotificationCenterSkeleton({ count = 5 }: NotificationCenterSkel
         <div key={i} className="flex items-start gap-3">
           <div className="flex-1 space-y-2">
             <div className="flex gap-2">
-              <Skeleton className="h-5 w-12 rounded-full" />
-              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="h-64 w-full" />
+              <Skeleton className="h-64 w-full" />
             </div>
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-3 w-1/2" />
+            <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-64 w-full" />
           </div>
-          <Skeleton className="h-7 w-7 rounded" />
+          <Skeleton className="h-64 w-full" />
         </div>
       ))}
     </div>

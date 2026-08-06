@@ -1,5 +1,11 @@
 import type { Metadata, Viewport } from 'next';
 
+/**
+ * Root layout — MUST provide <html> and <body> tags (Next.js 15.1+ requirement).
+ * Locale-specific attributes (lang, dir) and fonts are handled in [locale]/layout.tsx
+ * via suppressHydrationWarning on the root <html> element.
+ */
+
 export const metadata: Metadata = {
   title: {
     default: 'Notifier Admin',
@@ -18,5 +24,9 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <html suppressHydrationWarning>
+      <body>{children}</body>
+    </html>
+  );
 }

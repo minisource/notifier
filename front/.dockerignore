@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Next.js
+.next/
+out/
+
+# Build
+dist/
+build/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Test
+coverage/
+*.test.ts.snap
+tests/
+
+# Docker
+docker-compose*.yml
+.dockerignore
+Dockerfile.dev
+
+# Docs
+*.md
+!README.md
+docs/
+LICENSE
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CI/CD
+.github/
+
+# Turbo
+.turbo/
+
+# Misc
+*.bak
+*.old

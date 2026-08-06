@@ -9,6 +9,7 @@ func Providers(router fiber.Router, handler *handlers.ProviderHandler) {
 	router.Get("/", handler.ListProviders)
 	router.Post("/", handler.CreateProvider)
 	router.Get("/health", handler.GetProviderHealth)
+	router.Post("/health-check", handler.HealthCheckAllProviders)
 	router.Get("/:providerId", handler.GetProvider)
 	router.Put("/:providerId", handler.UpdateProvider)
 	router.Delete("/:providerId", handler.DeleteProvider)

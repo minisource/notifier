@@ -39,7 +39,7 @@ All routes are under `/{locale}/` where `locale` is `fa` or `en`.
 | `/providers` | Providers | Health cards, test dialog |
 | `/preferences` | Preferences | Channel settings |
 | `/observability` | Observability | Health, metrics, queue, workers |
-| `/settings` | Settings | Theme, language, mock session, debug |
+| `/settings` | Settings | Theme, language, debug |
 
 ## Environment Variables
 
@@ -47,38 +47,25 @@ See `.env.example` for full list.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NEXT_PUBLIC_NOTIFIER_API_BASE_URL` | `http://localhost:9002/v1` | Backend API URL |
-| `NEXT_PUBLIC_NOTIFIER_USE_MOCKS` | `false` | Use mock data instead of API |
-| `NEXT_PUBLIC_NOTIFIER_MOCK_AUTH_ENABLED` | `true` | Enable mock auth |
-| `NEXT_PUBLIC_NOTIFIER_MOCK_USER_ID` | `user_123` | Mock user ID |
-| `NEXT_PUBLIC_NOTIFIER_MOCK_TENANT_ID` | `tenant_123` | Mock tenant ID |
-| `NEXT_PUBLIC_NOTIFIER_MOCK_ROLES` | `admin,operator` | Mock roles |
+| `NEXT_PUBLIC_NOTIFIER_API_URL` | `http://localhost:9002/v1` | Backend API URL |
+| `NEXT_PUBLIC_NOTIFIER_AUTH_ENABLED` | `true` | Enforce Auth-service login (`false` = standalone local session) |
+| `NEXT_PUBLIC_NOTIFIER_LOCAL_USER_ID` | `local-admin` | Local session user ID when auth is disabled |
+| `NEXT_PUBLIC_NOTIFIER_LOCAL_EMAIL` | `admin@local` | Local session email when auth is disabled |
+| `NEXT_PUBLIC_NOTIFIER_LOCAL_NAME` | `Local Admin` | Local session display name when auth is disabled |
 | `NEXT_PUBLIC_NOTIFIER_REALTIME_MODE` | `polling` | Realtime mode |
 | `NEXT_PUBLIC_NOTIFIER_REALTIME_POLL_INTERVAL` | `30000` | Poll interval ms |
 | `NEXT_PUBLIC_NOTIFIER_SHOW_LIVE_TOASTS` | `true` | Show toast on new notifications |
 
-## Mock Mode vs Mock Auth
+## Auth-Enabled vs Standalone Mode
 
-The Notifier frontend has **two independent** mock controls:
+Mock data has been removed — the frontend always calls the real backend. The only toggle is authentication:
 
 | Variable | Controls | Default |
 |---|---|---|
-| `NEXT_PUBLIC_NOTIFIER_USE_MOCKS` | Mock **API data** (mock responses instead of real backend) | `false` |
-| `NEXT_PUBLIC_NOTIFIER_MOCK_AUTH_ENABLED` | Mock **session/token** (temporary until real Auth service) | `true` |
+| `NEXT_PUBLIC_NOTIFIER_AUTH_ENABLED` | Require login via the Auth service | `true` |
 
-These are **independent** — you can have mock auth enabled while calling real backend APIs (`USE_MOCKS=false` + `MOCK_AUTH_ENABLED=true`). This is the expected configuration until the real Auth service is integrated.
-
-### Mock Auth
-
-The frontend uses a mock auth adapter that reads from environment variables and localStorage. No real auth service is required for development.
-
-Mock session can be changed:
-1. Via Settings page (change roles, save to localStorage)
-2. Via `.env.local` (restart required)
-
-### Mock Data
-
-All mock data is centralized in `src/features/notifier/api/notifier-mocks.ts`. When `USE_MOCKS=true`, the centralized `notifier-api-mode.ts` switch serves mock implementations. When `USE_MOCKS=false`, all pages call real backend APIs through TanStack Query hooks.
+- **Auth enabled** (`true`): the app shows the login page and requires a real session/token from the Auth service. The backend must run with `AUTH_ENABLED=true`.
+- **Standalone** (`false`): the app boots directly with a local admin session (identity from `NEXT_PUBLIC_NOTIFIER_LOCAL_*`, defaults to `local-admin`). The backend must run with `AUTH_ENABLED=false` so routes are public; `/me` endpoints fall back to `AUTH_LOCAL_USER_ID` on the backend. No Auth service required.
 
 ## Admin vs Me API Usage
 

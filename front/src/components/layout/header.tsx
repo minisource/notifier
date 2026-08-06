@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@minisource/ui';
 import { Menu, LogOut } from 'lucide-react';
 import { useAuthStore } from '@/stores';
 

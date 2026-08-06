@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"time"
 
@@ -20,6 +19,7 @@ import (
 	routers "github.com/minisource/notifier/api/v1/routes"
 	"github.com/minisource/notifier/config"
 	"github.com/minisource/notifier/internal/repository"
+	"github.com/minisource/notifier/internal/retention"
 	"github.com/minisource/notifier/internal/service"
 	wsHub "github.com/minisource/notifier/internal/websocket"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -36,11 +36,16 @@ type AppContext struct {
 	ReminderService     *service.ReminderService
 	ProviderRepo        repository.ProviderRepository
 	SettingRepo         repository.SettingRepository
+	TenantRepo          repository.TenantRepository
 	WebSocketHub        *wsHub.Hub
 	AuthClient          *auth.Client // Auth client for service token validation
+	BalanceService      *service.BalanceService
+	BalanceRepo         repository.ProviderBalanceRepository
+	DeliveryControl     *service.DeliveryControlService
+	RetentionScheduler  *retention.Scheduler
 }
 
-func InitServer(ctx *AppContext) {
+func InitServer(ctx *AppContext) *fiber.App {
 	// Validate config at startup
 	if issues := ctx.Config.Validate(); len(issues) > 0 {
 		for _, issue := range issues {
@@ -63,13 +68,7 @@ func InitServer(ctx *AppContext) {
 	})
 
 	// Middleware — Request ID FIRST (before any other middleware)
-	app.Use(serviceMiddleware.RequestIDMiddleware(serviceMiddleware.RequestIDConfig{
-		HeaderName: "X-Request-Id",
-		ContextKey: "requestId",
-	}))
-
-	// Structured logging
-	app.Use(middleware.DefaultStructuredLogger(&ctx.Config.Logger))
+	app.Use(middleware.RequestID())
 
 	// Security middleware
 	app.Use(middleware.SecurityHeaders(middleware.DefaultSecurityHeadersConfig()))
@@ -80,6 +79,12 @@ func InitServer(ctx *AppContext) {
 	app.Use(middleware.Tracing(middleware.TracingConfig{
 		ServiceName: "notifier-service",
 	}))
+
+	// Structured access logging — canonical http_request_completed event.
+	// Runs AFTER tracing so the span exists when the event is emitted.
+	// Safe metadata only; body capture is opt-in via OBSERVABILITY_* env vars.
+	app.Use(middleware.AccessLog(middleware.LoadAccessLogConfigFromEnv("notifier-service", ctx.Logger)))
+
 	app.Use(middleware.Cors(ctx.Config.Cors.AllowOrigins))
 
 	// OPTIONS fast path — after CORS (headers are set), before expensive middleware
@@ -92,12 +97,28 @@ func InitServer(ctx *AppContext) {
 		return c.Next()
 	})
 
-	// Rate limiting
-	app.Use(serviceMiddleware.RateLimiterMiddleware(serviceMiddleware.RateLimitConfig{
+	// Rate limiting — controlled by RATE_LIMIT_ENABLED env var (default: true).
+	// A shared limiter instance is used so route-specific (stricter) limits can
+	// be registered BEFORE app.Use: high-risk delivery-control mutations get a
+	// low-frequency limit, while status/history/held polling gets a bounded
+	// limit (prevents abuse/DoS of the control plane).
+	rateLimiter := serviceMiddleware.NewRateLimiter(serviceMiddleware.RateLimitConfig{
 		Enabled:  ctx.Config.RateLimit.Enabled,
 		Requests: ctx.Config.RateLimit.Requests,
 		Window:   time.Duration(ctx.Config.RateLimit.WindowSeconds) * time.Second,
-	}))
+	})
+	if ctx.Config.RateLimit.Enabled {
+		if m := ctx.Config.RateLimit.ControlMutationRequests; m > 0 {
+			rateLimiter.SetRouteLimit("/v1/admin/delivery-control/pause", m, time.Minute)
+			rateLimiter.SetRouteLimit("/v1/admin/delivery-control/resume", m, time.Minute)
+		}
+		if r := ctx.Config.RateLimit.ControlReadRequests; r > 0 {
+			rateLimiter.SetRouteLimit("/v1/admin/delivery-control/status", r, time.Minute)
+			rateLimiter.SetRouteLimit("/v1/admin/delivery-control/history", r, time.Minute)
+			rateLimiter.SetRouteLimit("/v1/admin/delivery-control/held", r, time.Minute)
+		}
+	}
+	app.Use(rateLimiter.Handler())
 
 	// Request timing middleware — measures request duration, logs SLOW_REQUEST for requests >1s
 	app.Use(serviceMiddleware.RequestTimingMiddleware(serviceMiddleware.RequestTimingConfig{
@@ -116,16 +137,12 @@ func InitServer(ctx *AppContext) {
 		ContextKey:         "tenantId",
 		SkipPaths:          []string{"/health", "/ready", "/swagger", "/metrics", "/ws"},
 		TenantValidator: func(tenantID string) bool {
-			// Dev slug used by ticket/feedback services via gateway
-			if tenantID == "default" {
-				return true
-			}
-			if ctx.DB == nil {
-				return true
-			}
-			var count int64
-			ctx.DB.Table("tenants").Where("id = ? AND is_active = ?", tenantID, true).Count(&count)
-			return count > 0
+			// Tenants are owned by the Auth service. Membership + active status
+			// are enforced there (via the user's JWT and the /users/me/tenants
+			// list the frontend selects from). Notifier no longer owns a
+			// tenants table, so any tenant id supplied by an authenticated
+			// caller is accepted and used only as a scoping key.
+			return true
 		},
 	}))
 
@@ -148,6 +165,14 @@ func InitServer(ctx *AppContext) {
 		}
 	}
 
+	// Health and readiness endpoints
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return response.New().Data(fiber.Map{"status": "healthy", "service": "notifier"}).Send(c)
+	})
+	app.Get("/ready", func(c *fiber.Ctx) error {
+		return response.New().Data(fiber.Map{"status": "ready"}).Send(c)
+	})
+
 	// Metrics endpoint
 	app.Get("/metrics", adaptor.HTTPHandler(promhttp.Handler()))
 
@@ -155,14 +180,11 @@ func InitServer(ctx *AppContext) {
 	app.Get("/swagger/*", swagger.HandlerDefault)
 
 	// Start the server
-	ctx.Logger.Info(logging.General, logging.Startup, "Server started", map[logging.ExtraKey]interface{}{
+	ctx.Logger.Info(logging.General, logging.Startup, "Server starting", map[logging.ExtraKey]interface{}{
 		"port": ctx.Config.Server.InternalPort,
 	})
 
-	err := app.Listen(fmt.Sprintf(":%s", ctx.Config.Server.InternalPort))
-	if err != nil {
-		ctx.Logger.Fatal(logging.General, logging.Startup, err.Error(), nil)
-	}
+	return app
 }
 
 func RegisterRoutes(app *fiber.App, ctx *AppContext) {
@@ -172,11 +194,28 @@ func RegisterRoutes(app *fiber.App, ctx *AppContext) {
 	templateHandler := handlers.NewTemplateHandler(ctx.TemplateService)
 	inAppHandler := handlers.NewInAppHandler(ctx.NotificationService.GetRepository())
 	reminderHandler := handlers.NewReminderHandler(ctx.ReminderService)
-	providerHandler := handlers.NewProviderHandler(ctx.ProviderRepo)
+	providerHandler := handlers.NewProviderHandler(ctx.ProviderRepo, ctx.NotificationService.GetRepository(), ctx.Logger, ctx.DeliveryControl)
 	dashboardHandler := handlers.NewDashboardHandler(ctx.NotificationService)
 	observabilityHandler := handlers.NewObservabilityHandler(ctx.NotificationService)
 	deliveryHandler := handlers.NewDeliveryHandler(ctx.NotificationService)
+	providerAttemptHandler := handlers.NewProviderAttemptHandler(ctx.NotificationService)
 	settingsHandler := handlers.NewSettingsHandler(ctx.SettingRepo)
+	retentionHandler := handlers.NewAdminRetentionHandler(
+		retention.NewPolicyRepository(ctx.DB, ctx.Logger),
+		retention.NewRunRepository(ctx.DB, ctx.Logger),
+		ctx.RetentionScheduler,
+		ctx.Logger,
+	)
+	balanceHandler := handlers.NewBalanceHandler(
+		ctx.BalanceService,
+		ctx.ProviderRepo,
+		ctx.BalanceRepo,
+		ctx.Logger,
+	)
+	deliveryControlHandler := handlers.NewDeliveryControlHandler(
+		ctx.DeliveryControl,
+		ctx.NotificationService.GetRepository(),
+	)
 
 	// Create access-aware handlers
 	meHandler := handlers.NewMeHandler(
@@ -218,13 +257,21 @@ func RegisterRoutes(app *fiber.App, ctx *AppContext) {
 		if ctx.Config.Auth.Enabled {
 			ctx.Logger.Info(logging.General, logging.Startup, "Authentication is ENABLED", nil)
 
-			// User JWT auth middleware for direct API access
-			authConfig := middleware.AuthConfig{
-				Enabled:   true,
-				Secret:    ctx.Config.Auth.JWTSecret,
-				SkipPaths: []string{"/v1/health", "/v1/sms"},
-			}
-			jwtMiddleware := middleware.AuthMiddleware(authConfig)
+			// Build real auth middleware (supports JWKS / introspection / HS256)
+			jwtMiddleware := serviceMiddleware.RealAuthMiddleware(serviceMiddleware.RealAuthConfig{
+				ValidationMode:   ctx.Config.Auth.ValidationMode,
+				HS256Secret:      ctx.Config.Auth.JWTSecret,
+				JWKSURL:          ctx.Config.Auth.JWKSURL,
+				JWKSCacheTTL:     time.Duration(ctx.Config.Auth.JWKSCacheTTL) * time.Second,
+				JWKSRefreshOnKidMiss: true,
+				IntrospectionURL: ctx.Config.Auth.IntrospectionURL,
+				IntrospectionTimeout: 3 * time.Second,
+				Issuer:           ctx.Config.Auth.Issuer,
+				Audience:         ctx.Config.Auth.Audience,
+				SkipPaths:        []string{"/v1/health", "/v1/sms"},
+				RequireAuth:      true,
+				AppEnv:           ctx.Config.Server.RunMode,
+			})
 
 			// Service token auth middleware for service-to-service communication
 			var serviceMiddlewareHandler fiber.Handler
@@ -254,8 +301,8 @@ func RegisterRoutes(app *fiber.App, ctx *AppContext) {
 			preferences := v1.Group("/preferences", jwtMiddleware)
 			routers.Preferences(preferences, preferenceHandler)
 
-			// Protected template routes (super_admin/admin role or templates:read scope via service token)
-			templates := v1.Group("/templates", jwtMiddleware, middleware.RequireRoles("super_admin", "admin"))
+			// Protected template routes (admin or notifier:templates:manage permission)
+			templates := v1.Group("/templates", jwtMiddleware, serviceMiddleware.RequireAdminOrPermission("notifier:templates:manage"))
 			routers.Templates(templates, templateHandler)
 
 			// Protected in-app notification routes (require user JWT)
@@ -286,9 +333,51 @@ func RegisterRoutes(app *fiber.App, ctx *AppContext) {
 			me := v1.Group("/me", jwtMiddleware)
 			routers.Me(me, meHandler)
 
-			// Admin API — /admin routes (require admin or super_admin role)
-			admin := v1.Group("/admin", jwtMiddleware, middleware.RequireRoles("super_admin", "admin"))
+			// Admin API — /admin routes (require admin or notifier:admin permission)
+			admin := v1.Group("/admin", jwtMiddleware, serviceMiddleware.RequireAdmin())
+
+			// NOTE: static admin sub-routes MUST be registered before routers.Admin() —
+			// Fiber's router gives priority to the first-registered route when a static
+			// segment (e.g. /tenants) collides with a param route (e.g. /notifications/:notificationId).
+
+			// Admin dashboard overview (uses DashboardHandler — needs admin role)
+			adminDashboard := admin.Group("/notifications/dashboard")
+			adminDashboard.Get("/overview", dashboardHandler.GetDashboardOverview)
+
+			// Admin settings routes (namespaced to avoid collision with auth /v1/admin/settings)
+			adminSettings := admin.Group("/notifications/settings")
+			routers.Settings(adminSettings, settingsHandler)
+
+			// Admin log retention
+			adminRetention := admin.Group("/log-retention")
+			{
+				adminRetention.Get("/categories", retentionHandler.ListCategories)
+				adminRetention.Get("/policies", retentionHandler.ListPolicies)
+				adminRetention.Get("/policies/:id", retentionHandler.GetPolicy)
+				adminRetention.Put("/policies/:id", retentionHandler.UpsertPolicy)
+				adminRetention.Post("/policies/:id/enable", retentionHandler.EnablePolicy)
+				adminRetention.Post("/policies/:id/disable", retentionHandler.DisablePolicy)
+				adminRetention.Post("/policies/:id/preview", retentionHandler.PreviewCleanup)
+				adminRetention.Post("/policies/:id/run", retentionHandler.RunCleanup)
+				adminRetention.Get("/runs", retentionHandler.ListRuns)
+				adminRetention.Get("/runs/:id", retentionHandler.GetRun)
+			}
+
 			routers.Admin(admin, adminHandler)
+
+			// Admin global outbound delivery pause / emergency freeze routes
+			adminDeliveryControl := admin.Group("/delivery-control")
+			routers.DeliveryControl(adminDeliveryControl, deliveryControlHandler)
+
+			// Admin provider balance / quota monitoring routes — static /balance
+			// group MUST be registered before adminProviders (whose :providerId
+			// param route would otherwise swallow GET /providers/balance).
+			adminBalance := admin.Group("/providers/balance")
+			routers.ProviderBalance(adminBalance, balanceHandler)
+			admin.Get("/providers/:providerId/balance", balanceHandler.GetHealth)
+			admin.Post("/providers/:providerId/balance/refresh", balanceHandler.Refresh)
+			admin.Put("/providers/:providerId/balance/settings", balanceHandler.UpdateSettings)
+			admin.Get("/providers/:providerId/balance/alerts", balanceHandler.ListAlerts)
 
 			// Admin provider routes — use ProviderHandler (separate from AdminHandler)
 			adminProviders := admin.Group("/providers")
@@ -298,17 +387,14 @@ func RegisterRoutes(app *fiber.App, ctx *AppContext) {
 			adminDeliveries := admin.Group("/deliveries")
 			routers.Deliveries(adminDeliveries, deliveryHandler)
 
+			// Admin provider attempt (provider request lifecycle logging) routes
+			adminAttempts := admin.Group("/attempts")
+			routers.ProviderAttempts(adminAttempts, providerAttemptHandler)
+			admin.Get("/notifications/:notificationId/attempts", providerAttemptHandler.ListNotificationAttempts)
+
 			// Admin observability routes
 			adminObservability := admin.Group("/observability")
 			routers.Observability(adminObservability, observabilityHandler)
-
-			// Admin dashboard overview (uses DashboardHandler — needs admin role)
-			adminDashboard := admin.Group("/dashboard")
-			adminDashboard.Get("/overview", dashboardHandler.GetDashboardOverview)
-
-			// Admin settings routes
-			adminSettings := admin.Group("/settings")
-			routers.Settings(adminSettings, settingsHandler)
 		} else {
 			ctx.Logger.Warn(logging.General, logging.Startup, "Authentication is DISABLED - all routes are public", nil)
 
@@ -346,7 +432,49 @@ func RegisterRoutes(app *fiber.App, ctx *AppContext) {
 
 			// Admin API — /admin routes (no auth check in dev mode)
 			admin := v1.Group("/admin")
+
+			// NOTE: static admin sub-routes MUST be registered before routers.Admin() —
+			// Fiber's router gives priority to the first-registered route when a static
+			// segment (e.g. /tenants) collides with a param route (e.g. /notifications/:notificationId).
+
+			// Admin dashboard overview
+			adminDashboard := admin.Group("/notifications/dashboard")
+			adminDashboard.Get("/overview", dashboardHandler.GetDashboardOverview)
+
+			// Admin settings routes (namespaced to avoid collision with auth /v1/admin/settings)
+			adminSettings := admin.Group("/notifications/settings")
+			routers.Settings(adminSettings, settingsHandler)
+
+			// Admin log retention
+			adminRetention := admin.Group("/log-retention")
+			{
+				adminRetention.Get("/categories", retentionHandler.ListCategories)
+				adminRetention.Get("/policies", retentionHandler.ListPolicies)
+				adminRetention.Get("/policies/:id", retentionHandler.GetPolicy)
+				adminRetention.Put("/policies/:id", retentionHandler.UpsertPolicy)
+				adminRetention.Post("/policies/:id/enable", retentionHandler.EnablePolicy)
+				adminRetention.Post("/policies/:id/disable", retentionHandler.DisablePolicy)
+				adminRetention.Post("/policies/:id/preview", retentionHandler.PreviewCleanup)
+				adminRetention.Post("/policies/:id/run", retentionHandler.RunCleanup)
+				adminRetention.Get("/runs", retentionHandler.ListRuns)
+				adminRetention.Get("/runs/:id", retentionHandler.GetRun)
+			}
+
 			routers.Admin(admin, adminHandler)
+
+			// Admin global outbound delivery pause / emergency freeze routes
+			adminDeliveryControl := admin.Group("/delivery-control")
+			routers.DeliveryControl(adminDeliveryControl, deliveryControlHandler)
+
+			// Admin provider balance / quota monitoring routes — static /balance
+			// group MUST be registered before adminProviders (whose :providerId
+			// param route would otherwise swallow GET /providers/balance).
+			adminBalance := admin.Group("/providers/balance")
+			routers.ProviderBalance(adminBalance, balanceHandler)
+			admin.Get("/providers/:providerId/balance", balanceHandler.GetHealth)
+			admin.Post("/providers/:providerId/balance/refresh", balanceHandler.Refresh)
+			admin.Put("/providers/:providerId/balance/settings", balanceHandler.UpdateSettings)
+			admin.Get("/providers/:providerId/balance/alerts", balanceHandler.ListAlerts)
 
 			// Admin provider routes
 			adminProviders := admin.Group("/providers")
@@ -356,17 +484,14 @@ func RegisterRoutes(app *fiber.App, ctx *AppContext) {
 			adminDeliveries := admin.Group("/deliveries")
 			routers.Deliveries(adminDeliveries, deliveryHandler)
 
+			// Admin provider attempt (provider request lifecycle logging) routes
+			adminAttempts := admin.Group("/attempts")
+			routers.ProviderAttempts(adminAttempts, providerAttemptHandler)
+			admin.Get("/notifications/:notificationId/attempts", providerAttemptHandler.ListNotificationAttempts)
+
 			// Admin observability routes
 			adminObservability := admin.Group("/observability")
 			routers.Observability(adminObservability, observabilityHandler)
-
-			// Admin dashboard overview
-			adminDashboard := admin.Group("/dashboard")
-			adminDashboard.Get("/overview", dashboardHandler.GetDashboardOverview)
-
-			// Admin settings routes
-			adminSettings := admin.Group("/settings")
-			routers.Settings(adminSettings, settingsHandler)
 		}
 	}
 

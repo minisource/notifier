@@ -7,26 +7,12 @@ WORKDIR /src
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# NOTE: design-system is not yet published to npm (Phase 6 pending).
-# Until then, this Dockerfile requires a monorepo context that includes
-# both design-system/ and notifier/front/ (i.e. build from MiniSource/ root).
-# After Phase 6: replace file: protocol with npm-published @minisource/* packages.
+# Install dependencies (includes @minisource/ui from npm registry)
+COPY package.json ./
+RUN npm install --legacy-peer-deps --no-audit --no-fund
 
-# Copy design-system (needs to be in build context)
-COPY design-system/ ./design-system/
-COPY notifier/front/package.json notifier/front/package-lock.json ./notifier/front/
-
-# Install and build design-system (pnpm workspaces)
-WORKDIR /src/design-system
-RUN corepack enable && corepack prepare pnpm@latest --activate
-RUN pnpm install --no-frozen-lockfile
-RUN pnpm build
-
-# Install notifier/front dependencies
-WORKDIR /src/notifier/front
-RUN npm ci --legacy-peer-deps --no-audit --no-fund
-
-# Build Next.js (standalone output)
+# Copy source and build
+COPY . .
 ENV NEXT_PUBLIC_NOTIFIER_AUTH_ENABLED=true
 RUN npm run build
 
@@ -39,14 +25,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-COPY --from=builder /src/notifier/front/public ./public
-COPY --from=builder /src/notifier/front/.next/standalone ./
-COPY --from=builder /src/notifier/front/.next/static ./.next/static
+WORKDIR /app
+
+COPY --from=builder /src/public ./public
+COPY --from=builder /src/.next/standalone ./
+COPY --from=builder /src/.next/static ./.next/static
 
 RUN chown -R nextjs:nodejs /app
 USER nextjs
-
-WORKDIR /app
 EXPOSE 3004
 
 ENV PORT=3004

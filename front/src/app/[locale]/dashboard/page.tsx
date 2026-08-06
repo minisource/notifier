@@ -2,11 +2,12 @@
 
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
-import { PageHeader } from '@/components/shared/page-header';
+import { PageHeader } from '@minisource/ui';
 import { AutoRefreshControl } from '@/shared/components/auto-refresh-control';
-import { ErrorState } from '@/components/shared/error-state';
-import { PageSkeleton } from '@/components/shared/loading-state';
+import { ErrorState } from '@minisource/ui';
+import { Skeleton } from '@minisource/ui';
 import { RoleGuard } from '@/shared/components/role-guard';
+import { DeliveryControlBanner } from '@/features/delivery-control/components/delivery-control-banner';
 import { useDashboard } from '@/features/dashboard/hooks/use-dashboard';
 import { DashboardStatusStrip } from '@/features/dashboard/components/dashboard-status-strip';
 import { DashboardMetricGrid } from '@/features/dashboard/components/dashboard-metric-grid';
@@ -38,12 +39,12 @@ export default function DashboardPage() {
     ? new Date(dataUpdatedAt).toLocaleTimeString()
     : undefined;
 
-  if (isLoading) return <PageSkeleton context="dashboard" layout="cards" cards={8} />;
+  if (isLoading) return <Skeleton className="h-64 w-full" />;
 
   if (isError || !data) {
     return (
       <RoleGuard>
-        <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.subtitle')} />
+        <PageHeader title={t('dashboard.title')} description={t('dashboard.subtitle')} />
         <ErrorState
           message={error instanceof Error ? error.message : t('common.error_occurred')}
           onRetry={() => refetch()}
@@ -57,7 +58,7 @@ export default function DashboardPage() {
   return (
     <RoleGuard>
       <div className="space-y-5">
-        <PageHeader title={t('dashboard.title')} subtitle={t('dashboard.subtitle')}>
+        <PageHeader title={t('dashboard.title')} description={t('dashboard.subtitle')}>
           <AutoRefreshControl
             isRefreshing={isFetching}
             onRefresh={() => refetch()}
@@ -67,6 +68,8 @@ export default function DashboardPage() {
             intervalSeconds={30}
           />
         </PageHeader>
+
+        <DeliveryControlBanner />
 
         <DashboardStatusStrip data={data} />
         <DashboardMetricGrid metrics={metrics} />

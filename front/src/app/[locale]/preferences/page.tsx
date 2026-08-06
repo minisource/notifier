@@ -1,16 +1,15 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { PageHeader } from '@/components/shared/page-header';
-import { PageContainer } from '@/components/shared/page-container';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ErrorState } from '@/components/shared/error-state';
-import { PageSkeleton } from '@/components/shared/loading-state';
+import { PageHeader } from '@minisource/ui';
+import { Card, CardContent, CardHeader, CardTitle } from '@minisource/ui';
+import { Button } from '@minisource/ui';
+import { Switch } from '@minisource/ui';
+import { Label } from '@minisource/ui';
+import { Separator } from '@minisource/ui';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@minisource/ui';
+import { ErrorState } from '@minisource/ui';
+import { Skeleton } from '@minisource/ui';
 import { usePreferences, useUpdatePreference } from '@/features/preferences/hooks/use-preferences';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -70,24 +69,24 @@ export default function PreferencesPage() {
     setSaving(false);
   };
 
-  if (isLoading) return <PageSkeleton context="preferences" layout="detail" />;
+  if (isLoading) return <Skeleton className="h-64 w-full" />;
 
   if (isError) {
     return (
-      <PageContainer>
-        <PageHeader title={t('preferences.title')} subtitle={t('preferences.subtitle')} />
+      <div className="space-y-6">
+        <PageHeader title={t('preferences.title')} description={t('preferences.subtitle')} />
         <ErrorState
           title={t('errors.generic')}
           message={(error as Error)?.message || t('errors.generic')}
           onRetry={() => refetch()}
         />
-      </PageContainer>
+      </div>
     );
   }
 
   return (
-    <PageContainer>
-      <PageHeader title={t('preferences.title')} subtitle={t('preferences.subtitle')}>
+    <div className="space-y-6">
+      <PageHeader title={t('preferences.title')} description={t('preferences.subtitle')}>
         <Button size="sm" onClick={handleSave} disabled={saving}>
           <Save className="ml-1.5 h-4 w-4" />
           {saving ? t('common.loading') : t('common.save')}
@@ -198,6 +197,6 @@ export default function PreferencesPage() {
 
         {/* Header actions are inline */}
       </div>
-    </PageContainer>
+    </div>
   );
 }

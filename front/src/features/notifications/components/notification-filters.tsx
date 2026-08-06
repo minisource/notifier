@@ -1,9 +1,9 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { SearchInput } from '@/components/shared/search-input';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchInput } from '@minisource/ui';
+import { Button } from '@minisource/ui';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@minisource/ui';
 import { X } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import type { NotificationChannel, NotificationStatus, NotificationPriority } from '../types';
@@ -34,7 +34,7 @@ export function NotificationFilters({
 }: NotificationFiltersProps) {
   const t = useTranslations();
   const params = useParams();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
   const isRtl = locale === 'fa';
 
   return (

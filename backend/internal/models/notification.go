@@ -38,6 +38,10 @@ const (
 	NotificationStatusCanceled   NotificationStatus = "canceled"
 	NotificationStatusCancelled  NotificationStatus = "cancelled"
 	NotificationStatusDigested   NotificationStatus = "digested"
+	// NotificationStatusHeld marks a delivery frozen by the global outbound
+	// delivery pause. It is NOT a failure: retry budget is preserved and the
+	// delivery resumes when the pause ends.
+	NotificationStatusHeld        NotificationStatus = "held"
 )
 
 // NotificationPriority represents the priority level
@@ -79,6 +83,13 @@ type Notification struct {
 	MaxRetries  int        `gorm:"default:3" json:"maxRetries"`
 	NextRetryAt *time.Time `gorm:"index" json:"nextRetryAt,omitempty"`
 
+	// Global delivery pause hold information (status = "held"). Records which
+	// pause generation held the delivery and why, so a hold is never confused
+	// with a provider failure.
+	PauseVersion int64      `gorm:"not null;default:0" json:"pauseVersion,omitempty"`
+	HeldReason   string     `gorm:"type:varchar(255)" json:"heldReason,omitempty"`
+	HeldAt       *time.Time `json:"heldAt,omitempty"`
+
 	// Error information
 	ErrorMessage string `gorm:"type:text" json:"errorMessage,omitempty"`
 
@@ -89,8 +100,9 @@ type Notification struct {
 	IdempotencyKey string `gorm:"type:varchar(255);uniqueIndex:idx_notif_idempotency_key;default:''" json:"idempotencyKey,omitempty"`
 
 	// Provider information
-	Provider      string `gorm:"type:varchar(100)" json:"provider,omitempty"`
-	ProviderMsgID string `gorm:"type:varchar(255);index" json:"providerMsgId,omitempty"`
+	Provider      string     `gorm:"type:varchar(100)" json:"provider,omitempty"`
+	ProviderID    *uuid.UUID `gorm:"type:uuid;index" json:"providerId,omitempty"` // explicit provider selection (no failover)
+	ProviderMsgID string     `gorm:"type:varchar(255);index" json:"providerMsgId,omitempty"`
 
 	// Timing
 	ScheduledAt  *time.Time `gorm:"index" json:"scheduledAt,omitempty"`

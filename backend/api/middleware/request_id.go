@@ -70,7 +70,12 @@ func RequestIDMiddleware(cfg ...RequestIDConfig) fiber.Handler {
 }
 
 // GetRequestID extracts the request ID from the Fiber context.
+// Reads the canonical "request_id" key (set by the shared go-common RequestID
+// middleware) with a fallback to the legacy "requestId" key.
 func GetRequestID(c *fiber.Ctx) string {
+	if id, ok := c.Locals("request_id").(string); ok {
+		return id
+	}
 	if id, ok := c.Locals("requestId").(string); ok {
 		return id
 	}

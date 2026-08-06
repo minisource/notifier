@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"strconv"
 	"sync"
 	"time"
 
@@ -49,7 +50,9 @@ func newIPRateLimiter(config RateLimitConfig) *ipRateLimiter {
 	}
 }
 
-func (l *ipRateLimiter) allow(ip string, path string) (bool, int) {
+// allow checks whether the request from ip to path is permitted. Returns
+// (allowed, window) so callers can emit a bounded Retry-After on rejection.
+func (l *ipRateLimiter) allow(ip string, path string) (bool, time.Duration) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -78,12 +81,12 @@ func (l *ipRateLimiter) allow(ip string, path string) (bool, int) {
 
 	if len(valid) >= maxReqs {
 		l.requests[ip] = valid
-		return false, maxReqs
+		return false, window
 	}
 
 	valid = append(valid, now)
 	l.requests[ip] = valid
-	return true, maxReqs
+	return true, window
 }
 
 // SetRouteLimit sets a per-route override for rate limiting.
@@ -92,6 +95,44 @@ func (l *ipRateLimiter) SetRouteLimit(pathPrefix string, requests int, window ti
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.routes[pathPrefix] = routeLimitConfig{requests: requests, window: window}
+}
+
+// Handler returns a Fiber middleware handler bound to this limiter instance.
+// Used when route-specific limits must be registered BEFORE app.Use (see
+// api.go: the delivery-control endpoints get strict low-frequency limits).
+func (l *ipRateLimiter) Handler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if !l.config.Enabled {
+			return c.Next()
+		}
+
+		// Skip specific paths
+		for _, path := range l.config.SkipPaths {
+			if c.Path() == path {
+				return c.Next()
+			}
+		}
+
+		ip := c.IP()
+		allowed, window := l.allow(ip, c.Path())
+		if !allowed {
+			// Bounded Retry-After hint so clients do not hammer immediately.
+			retryAfter := int(window.Seconds())
+			if retryAfter < 1 {
+				retryAfter = 1
+			}
+			c.Set("Retry-After", strconv.Itoa(retryAfter))
+			c.Status(fiber.StatusTooManyRequests)
+			return c.JSON(fiber.Map{
+				"error": fiber.Map{
+					"code":    "RATE_LIMITED",
+					"message": "Too many requests. Please try again later.",
+				},
+			})
+		}
+
+		return c.Next()
+	}
 }
 
 // RateLimiterMiddleware returns a Fiber middleware that rate-limits by IP address.
@@ -112,33 +153,7 @@ func RateLimiterMiddleware(cfg ...RateLimitConfig) fiber.Handler {
 	}
 
 	limiter := newIPRateLimiter(config)
-
-	return func(c *fiber.Ctx) error {
-		if !config.Enabled {
-			return c.Next()
-		}
-
-		// Skip specific paths
-		for _, path := range config.SkipPaths {
-			if c.Path() == path {
-				return c.Next()
-			}
-		}
-
-		ip := c.IP()
-		allowed, _ := limiter.allow(ip, c.Path())
-		if !allowed {
-			c.Status(fiber.StatusTooManyRequests)
-			return c.JSON(fiber.Map{
-				"error": fiber.Map{
-					"code":    "RATE_LIMITED",
-					"message": "Too many requests. Please try again later.",
-				},
-			})
-		}
-
-		return c.Next()
-	}
+	return limiter.Handler()
 }
 
 // NewRateLimiter creates a rate limiter instance for programmatic use (e.g., registering route-specific limits).

@@ -2,114 +2,90 @@
 
 import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
-import { PageHeader } from '@/components/shared/page-header';
-import { PageContainer } from '@/components/shared/page-container';
-import { SectionCard } from '@/components/shared/section-card';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { ErrorState } from '@/components/shared/error-state';
-import { PageSkeleton } from '@/components/shared/loading-state';
-import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { PageHeader } from '@minisource/ui';
+import { Button } from '@minisource/ui';
+import { Card, CardHeader, CardTitle, CardContent } from '@minisource/ui';
+import { Badge } from '@minisource/ui';
+import { ErrorState } from '@minisource/ui';
+import { Skeleton } from '@minisource/ui';
+import { ConfirmDialog } from '@minisource/ui';
 import { NotificationAttemptsList } from '@/features/notifications/components/notification-attempts-list';
-import { getNotificationDeliveries } from '@/features/notifications/api';
-import { ArrowLeft, Server, RotateCcw, AlertTriangle, Timer } from 'lucide-react';
+import { useDelivery, useRetryDelivery } from '@/features/deliveries/hooks/use-deliveries';
+import { ArrowLeft, Server, RotateCcw, AlertTriangle, Timer, User, FileText } from 'lucide-react';
 import { formatDateTime } from '@/lib/utils/date';
-import { shortId } from '@/lib/utils/format';
+import { shortId, maskEmail, maskPhone } from '@/lib/utils/format';
 import { toast } from 'sonner';
-import type { NotificationDelivery } from '@/features/notifications/types';
+import { useState } from 'react';
+import { StatusBadge } from '@/components/shared/status-badge';
+import { ChannelBadge } from '@/components/shared/channel-badge';
 
 export default function DeliveryDetailPage() {
   const t = useTranslations();
   const router = useRouter();
   const params = useParams();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
   const id = params?.id as string;
   const [showRetryDialog, setShowRetryDialog] = useState(false);
 
-  const [delivery, setDelivery] = useState<NotificationDelivery | null>(null);
-  const [deliveries, setDeliveries] = useState<NotificationDelivery[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isError, setIsError] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  const [isRetrying, setIsRetrying] = useState(false);
+  const { data: delivery, isLoading, isError, error, refetch } = useDelivery(id);
+  const retryMutation = useRetryDelivery();
 
-  const loadDelivery = async () => {
-    setIsLoading(true);
-    setIsError(false);
-    setError(null);
-    try {
-      const result = await getNotificationDeliveries(id);
-      if (result.length > 0) {
-        setDelivery(result[0]);
-        setDeliveries(result);
-      } else {
-        setIsError(true);
-        setError(new Error(t('deliveries.no_deliveries')));
-      }
-    } catch (err) {
-      setIsError(true);
-      setError(err as Error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => { loadDelivery(); }, [id]);
+  const canRetry = delivery?.status === 'failed' || delivery?.status === 'dead';
+  const recipient = delivery?.recipientEmail || delivery?.recipientPhone || delivery?.recipientId;
 
   const handleRetry = () => {
-    setIsRetrying(true);
-    setTimeout(() => {
-      setIsRetrying(false);
-      setShowRetryDialog(false);
-      toast.success(t('notifications.actions.retry'));
-      loadDelivery();
-    }, 500);
+    retryMutation.mutate(id, {
+      onSuccess: () => {
+        toast.success(t('notifications.actions.retry_success'));
+        setShowRetryDialog(false);
+        refetch();
+      },
+      onError: (err: Error) => {
+        toast.error(err?.message || t('errors.generic'));
+        setShowRetryDialog(false);
+      },
+    });
   };
 
   if (isLoading) {
     return (
-      <PageContainer>
+      <div className="space-y-6">
         <PageHeader title={t('deliveries.title')}>
-          <Button variant="ghost" onClick={() => router.push(`/${locale}/deliveries`)} disabled>
+          <Button variant="ghost" onClick={() => router.push(`/deliveries`)} disabled>
             <ArrowLeft className="ml-2 h-4 w-4" />
             {t('common.back')}
           </Button>
         </PageHeader>
-        <PageSkeleton context="deliveries" layout="detail" />
-      </PageContainer>
+        <Skeleton className="h-64 w-full" />
+      </div>
     );
   }
 
   if (isError || !delivery) {
     return (
-      <PageContainer>
+      <div className="space-y-6">
         <PageHeader title={t('deliveries.title')}>
-          <Button variant="ghost" onClick={() => router.push(`/${locale}/deliveries`)}>
+          <Button variant="ghost" onClick={() => router.push(`/deliveries`)}>
             <ArrowLeft className="ml-2 h-4 w-4" />
             {t('common.back')}
           </Button>
         </PageHeader>
         <ErrorState
           title={t('errors.not_found')}
-          message={error?.message || t('deliveries.no_deliveries')}
-          onRetry={() => loadDelivery()}
+          message={(error as Error)?.message || t('deliveries.no_deliveries')}
+          onRetry={() => refetch()}
         />
-      </PageContainer>
+      </div>
     );
   }
 
-  const canRetry = delivery.status === 'failed' || delivery.status === 'dead';
-  const hasError = delivery.status === 'failed' || delivery.status === 'dead';
-
   return (
-    <PageContainer>
+    <div className="space-y-6">
       <PageHeader
-        title={t('deliveries.title')}
-        subtitle={`${shortId(delivery.id)} · ${delivery.provider}`}
+        title={delivery.subject || t('deliveries.title')}
+        description={`${shortId(delivery.id)} · ${delivery.channel}`}
       >
-        <Button variant="ghost" size="sm" onClick={() => router.push(`/${locale}/deliveries`)}>
+        <Button variant="ghost" size="sm" onClick={() => router.push(`/deliveries`)}>
           <ArrowLeft className="ml-1.5 h-4 w-4" />
           {t('common.back')}
         </Button>
@@ -122,17 +98,15 @@ export default function DeliveryDetailPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={delivery.status === 'delivered' ? 'default' : hasError ? 'destructive' : delivery.status === 'processing' ? 'secondary' : 'outline'}>
-                    {t(`statuses.${delivery.status}`)}
-                  </Badge>
-                  <Badge variant="outline">{delivery.provider}</Badge>
-                  <Badge variant="outline">{delivery.channel}</Badge>
+                  <StatusBadge status={delivery.status} size="sm" />
+                  <Badge variant="outline">{delivery.provider || '—'}</Badge>
+                  <ChannelBadge channel={delivery.channel} size="sm" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <div className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <Server className="h-3.5 w-3.5" />
-                    <span>{delivery.provider}</span>
+                    <span>{delivery.provider || '—'}</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <Timer className="h-3.5 w-3.5" />
@@ -145,7 +119,32 @@ export default function DeliveryDetailPage() {
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <span className="text-xs">{formatDateTime(delivery.createdAt, locale)}</span>
                   </div>
+                  {recipient && (
+                    <div className="flex items-center gap-1.5 text-muted-foreground sm:col-span-2">
+                      <User className="h-3.5 w-3.5" />
+                      <span className="font-mono text-xs">
+                        {delivery.recipientEmail
+                          ? maskEmail(delivery.recipientEmail)
+                          : delivery.recipientPhone
+                            ? maskPhone(delivery.recipientPhone)
+                            : delivery.recipientId}
+                      </span>
+                    </div>
+                  )}
                 </div>
+
+                {/* Message content */}
+                {(delivery.subject || delivery.body) && (
+                  <div className="rounded-lg bg-muted/40 p-3">
+                    <div className="flex items-center gap-1.5 text-sm font-medium">
+                      <FileText className="h-4 w-4" />
+                      {delivery.subject || t('notifications.body')}
+                    </div>
+                    {delivery.body && (
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{delivery.body}</p>
+                    )}
+                  </div>
+                )}
 
                 {delivery.lastError && (
                   <div className="rounded-lg bg-red-50 p-3 dark:bg-red-950/20">
@@ -163,10 +162,10 @@ export default function DeliveryDetailPage() {
                   size="sm"
                   variant={delivery.status === 'dead' ? 'destructive' : 'default'}
                   onClick={() => setShowRetryDialog(true)}
-                  disabled={isRetrying}
+                  disabled={retryMutation.isPending}
                 >
                   <RotateCcw className="ml-1.5 h-4 w-4" />
-                  {t('notifications.actions.retry')}
+                  {retryMutation.isPending ? t('deliveries.retrying') : t('notifications.actions.retry')}
                 </Button>
               )}
             </div>
@@ -174,12 +173,12 @@ export default function DeliveryDetailPage() {
         </Card>
 
         {/* Attempts */}
-        <SectionCard title={t('notifications.delivery_attempts')} icon={Server}>
+        <Card><CardHeader><CardTitle>{t('notifications.delivery_attempts')}</CardTitle></CardHeader><CardContent>
           <NotificationAttemptsList
-            deliveries={deliveries}
+            deliveries={delivery.attempts?.length ? [delivery] : []}
             loading={false}
           />
-        </SectionCard>
+        </CardContent></Card>
       </div>
 
       <ConfirmDialog
@@ -192,6 +191,6 @@ export default function DeliveryDetailPage() {
         cancelLabel={t('common.cancel')}
         destructive={delivery.status === 'dead'}
       />
-    </PageContainer>
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { providersKeys } from '../query-keys';
-import { listProviders, testProvider, createProvider, updateProvider, deleteProvider, toggleProviderStatus, getProvider, getProviderHealth, setDefaultProvider } from '../api';
+import { listProviders, testProvider, createProvider, updateProvider, deleteProvider, toggleProviderStatus, getProvider, getProviderHealth, setDefaultProvider, listProviderBalanceHealth, getProviderBalanceDetail, refreshProviderBalance, updateProviderBalanceSettings, listCreditAlerts, acknowledgeCreditAlert } from '../api';
 
 export function useProviders() {
   return useQuery({
@@ -28,7 +28,7 @@ export function useProviderHealth() {
 export function useCreateProvider() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { name: string; channel: string; type?: string; status?: string; priority?: number; isDefault?: boolean; description?: string; config?: Record<string, unknown>; secretConfig?: Record<string, unknown> }) => createProvider(input),
+    mutationFn: (input: { tenantId?: string; name: string; channel: string; type?: string; status?: string; priority?: number; isDefault?: boolean; description?: string; config?: Record<string, unknown>; secretConfig?: Record<string, unknown> }) => createProvider(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: providersKeys.lists() });
       toast.success('Provider created');
@@ -42,7 +42,7 @@ export function useCreateProvider() {
 export function useUpdateProvider() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: { name?: string; channel?: string; type?: string; config?: Record<string, unknown>; priority?: number; isEnabled?: boolean; isDefault?: boolean; isPrimary?: boolean; status?: string; description?: string; secretConfig?: Record<string, unknown> } }) => updateProvider(id, input),
+    mutationFn: ({ id, input }: { id: string; input: { tenantId?: string; name?: string; channel?: string; type?: string; config?: Record<string, unknown>; priority?: number; isEnabled?: boolean; isDefault?: boolean; isPrimary?: boolean; status?: string; description?: string; secretConfig?: Record<string, unknown> } }) => updateProvider(id, input),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: providersKeys.lists() });
       queryClient.invalidateQueries({ queryKey: providersKeys.detail(variables.id) });
@@ -109,6 +109,81 @@ export function useTestProvider() {
     },
     onError: (err: Error) => {
       toast.error('Provider test failed', { description: err.message });
+    },
+  });
+}
+
+// ---- Provider account balance / quota / credit alerting ----
+
+export function useProviderBalanceHealth() {
+  return useQuery({
+    queryKey: ['providers', 'balance-health'],
+    queryFn: listProviderBalanceHealth,
+  });
+}
+
+export function useProviderBalanceDetail(id: string) {
+  return useQuery({
+    queryKey: ['providers', 'balance-detail', id],
+    queryFn: () => getProviderBalanceDetail(id),
+    enabled: !!id,
+  });
+}
+
+export function useRefreshProviderBalance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => refreshProviderBalance(id),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['providers', 'balance-health'] });
+      queryClient.invalidateQueries({ queryKey: ['providers', 'balance-detail', result.providerId] });
+      if (result.success) {
+        toast.success('Balance refreshed');
+      } else {
+        toast.error('Balance refresh failed', { description: result.errorMessage || result.errorKind || 'Refresh error' });
+      }
+    },
+    onError: (err: Error) => {
+      toast.error('Balance refresh failed', { description: err.message });
+    },
+  });
+}
+
+export function useUpdateProviderBalanceSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, settings }: { id: string; settings: Parameters<typeof updateProviderBalanceSettings>[1] }) =>
+      updateProviderBalanceSettings(id, settings),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['providers', 'balance-detail', variables.id] });
+      queryClient.invalidateQueries({ queryKey: providersKeys.detail(variables.id) });
+      toast.success('Balance settings saved');
+    },
+    onError: (err: Error) => {
+      toast.error('Failed to save balance settings', { description: err.message });
+    },
+  });
+}
+
+export function useCreditAlerts(params?: { status?: string; providerId?: string }) {
+  return useQuery({
+    queryKey: ['providers', 'credit-alerts', params?.status ?? 'all', params?.providerId ?? 'all'],
+    queryFn: () => listCreditAlerts(params),
+  });
+}
+
+export function useAcknowledgeCreditAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (alertId: string) => acknowledgeCreditAlert(alertId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['providers', 'credit-alerts'] });
+      queryClient.invalidateQueries({ queryKey: ['providers', 'balance-health'] });
+      queryClient.invalidateQueries({ queryKey: ['providers', 'balance-detail'] });
+      toast.success('Alert acknowledged');
+    },
+    onError: (err: Error) => {
+      toast.error('Failed to acknowledge alert', { description: err.message });
     },
   });
 }

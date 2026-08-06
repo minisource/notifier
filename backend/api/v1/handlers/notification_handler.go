@@ -2,12 +2,16 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/minisource/go-common/httpclient"
 	"github.com/minisource/go-common/i18n"
 	"github.com/minisource/go-common/response"
+	"github.com/minisource/go-sdk/auth"
 	"github.com/minisource/notifier/api/v1/dto"
 	"github.com/minisource/notifier/internal/models"
 	"github.com/minisource/notifier/internal/repository"
@@ -20,6 +24,30 @@ type NotificationHandler struct {
 
 func NewNotificationHandler(service *service.NotificationService) *NotificationHandler {
 	return &NotificationHandler{service: service}
+}
+
+// mergeVariablesIntoMetadata merges template variables into the request's
+// metadata under the "data" key so the send pipeline can map them to provider
+// tokens (e.g. code → token for Kavenegar lookup). Explicit metadata["data"]
+// wins on key conflicts; variables set keys metadata does not define. Shared
+// by single and batch create so the contract stays in sync.
+func mergeVariablesIntoMetadata(req *dto.CreateNotificationRequest) {
+	if len(req.Variables) == 0 {
+		return
+	}
+	if req.Metadata == nil {
+		req.Metadata = make(map[string]interface{})
+	}
+	dataMap, _ := req.Metadata["data"].(map[string]interface{})
+	if dataMap == nil {
+		dataMap = make(map[string]interface{})
+	}
+	for k, v := range req.Variables {
+		if _, exists := dataMap[k]; !exists {
+			dataMap[k] = v
+		}
+	}
+	req.Metadata["data"] = dataMap
 }
 
 // mapNotificationToDetail maps a Notification model to a full NotificationResponse DTO
@@ -42,6 +70,7 @@ func mapNotificationToDetail(n *models.Notification) *dto.NotificationResponse {
 		MaxRetries:     n.MaxRetries,
 		ErrorMessage:   n.ErrorMessage,
 		Provider:       n.Provider,
+		ProviderID:     n.ProviderID,
 		ScheduledAt:    n.ScheduledAt,
 		SentAt:         n.SentAt,
 		DeliveredAt:    n.DeliveredAt,
@@ -247,6 +276,76 @@ func (h *NotificationHandler) RetryNotification(c *fiber.Ctx) error {
 		Message: "Notification queued for retry",
 		ID:      notificationID,
 		Status:  "pending",
+	})
+}
+
+// ============================================
+// BulkRetryNotifications / RetryAllFailed — bulk retry
+// ============================================
+
+// BulkRetryNotifications godoc
+// @Summary Retry multiple notifications
+// @Description Retry a batch of failed/dead notifications by ID. Each is re-queued for exactly one more attempt (no fresh auto-retry budget).
+// @Tags Notifications
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body dto.BulkRetryNotificationsRequest true "Notification IDs"
+// @Success 200 {object} dto.BulkRetryNotificationsResponse
+// @Failure 400 {object} dto.ErrorResponse
+// @Failure 404 {object} dto.ErrorResponse
+// @Router /notifications/retry [post]
+func (h *NotificationHandler) BulkRetryNotifications(c *fiber.Ctx) error {
+	req := new(dto.BulkRetryNotificationsRequest)
+	if err := c.BodyParser(req); err != nil {
+		return response.BadRequest(c, "INVALID_JSON", "Request body is not valid JSON: "+err.Error())
+	}
+
+	if len(req.IDs) == 0 {
+		return response.BadRequest(c, "IDS_REQUIRED", "At least one notification id is required")
+	}
+	if len(req.IDs) > 500 {
+		return response.BadRequest(c, "TOO_MANY_IDS", "Maximum 500 ids per request")
+	}
+
+	ids := make([]uuid.UUID, 0, len(req.IDs))
+	for _, idStr := range req.IDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			return response.BadRequest(c, "INVALID_NOTIFICATION_ID", "Invalid notification ID: "+idStr)
+		}
+		ids = append(ids, id)
+	}
+
+	retried, err := h.service.BulkRetryNotifications(c.Context(), ids)
+	if err != nil {
+		return response.InternalError(c, "Failed to retry notifications: "+err.Error())
+	}
+
+	return response.OK(c, &dto.BulkRetryNotificationsResponse{
+		Retried: retried,
+		Skipped: int64(len(ids)) - retried,
+	})
+}
+
+// RetryAllFailed godoc
+// @Summary Retry all failed notifications
+// @Description Re-queue every failed and dead-letter notification for one more attempt each.
+// @Tags Notifications
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} dto.RetryAllFailedResponse
+// @Failure 500 {object} dto.ErrorResponse
+// @Router /notifications/retry-failed [post]
+func (h *NotificationHandler) RetryAllFailed(c *fiber.Ctx) error {
+	retried, err := h.service.RetryAllFailedNotifications(c.Context())
+	if err != nil {
+		return response.InternalError(c, "Failed to retry failed notifications: "+err.Error())
+	}
+
+	return response.OK(c, &dto.RetryAllFailedResponse{
+		Retried: retried,
 	})
 }
 
@@ -499,6 +598,15 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 		}
 	}
 
+	// Legacy flat fallback: a bare "userId" (without recipientId / recipient)
+	// marks the recipient for in_app/push sends (the contract the MiniSource
+	// services and the e2e suite rely on). Scoped to those channels so a
+	// malformed webhook request is still caught by the webhook validation.
+	if recipientID == "" && req.UserID != "" &&
+		(channel == models.NotificationTypeInApp || channel == models.NotificationTypePush) {
+		recipientID = req.UserID
+	}
+
 	// Channel-specific recipient validation
 	if channel == models.NotificationTypeSMS && recipientPhone == "" {
 		validationErrors = append(validationErrors, response.ValidationError{
@@ -576,6 +684,60 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 		recipientID = req.Recipient.UserID
 	}
 
+	// Server-side User Validation and Tenant scoping check against Auth service.
+	// Skipped for service-to-service calls: the service middleware already
+	// authenticated the caller with the notifications:send scope, and its
+	// service token would be rejected by the user-admin endpoint anyway.
+	if (channel == models.NotificationTypeInApp || channel == models.NotificationTypePush) && recipientID != "" {
+		if _, err := uuid.Parse(recipientID); err == nil && c.Locals("serviceClientId") == nil {
+			authHeader := c.Get("Authorization")
+			// Only validate if auth is enabled, we have a token to forward, and
+			// the go-sdk auth client is wired up.
+			if h.service.GetConfig().Auth.Enabled && authHeader != "" && h.service.AuthClient != nil {
+				// Look the recipient up in the Auth service directory through the
+				// go-sdk auth client. GET /v1/admin/users/{id} is protected by
+				// user-token auth with an admin role, so the caller's raw JWT is
+				// forwarded (mirrors ValidateToken) and the service token is never
+				// used here.
+				opts := []auth.GetUserOption{}
+				if tenantIDHeader := c.Get("X-Tenant-Id"); tenantIDHeader != "" {
+					opts = append(opts, auth.WithTenantID(tenantIDHeader))
+				}
+
+				_, err := h.service.AuthClient.GetUser(c.Context(), strings.TrimPrefix(authHeader, "Bearer "), recipientID, opts...)
+				if err != nil {
+					if errors.Is(err, auth.ErrUserNotFound) {
+						return response.BadRequest(c, "INVALID_RECIPIENT", "The selected recipient is unavailable in the current context.")
+					}
+					var svcErr *httpclient.ServiceUnavailableError
+					if errors.As(err, &svcErr) {
+						return response.InternalError(c, "Failed to connect to Auth directory: "+err.Error())
+					}
+					return response.BadRequest(c, "INVALID_RECIPIENT", "Failed to validate recipient against Auth directory.")
+				}
+			}
+		}
+	}
+
+	// Resolve tenant scope: an explicit body tenantId is authoritative. "all"/
+	// "default"/empty means global (nil). Only when the body omits tenantId
+	// entirely do we fall back to the X-Tenant-Id header so notifications
+	// created while a tenant is active belong to that tenant.
+	var tenantID *uuid.UUID
+	if req.TenantID != "" && req.TenantID != "all" && req.TenantID != "default" {
+		tid, err := uuid.Parse(req.TenantID)
+		if err != nil {
+			return response.BadRequest(c, "INVALID_TENANT_ID", "tenantId is not a valid tenant UUID")
+		}
+		tenantID = &tid
+	} else if req.TenantID == "" {
+		if tenantIDStr := c.Get("X-Tenant-Id"); tenantIDStr != "" {
+			if tid, err := uuid.Parse(tenantIDStr); err == nil {
+				tenantID = &tid
+			}
+		}
+	}
+
 	notification := &models.Notification{
 		UserID:         userID,
 		Type:           models.NotificationType(channel),
@@ -590,14 +752,32 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 		TemplateKey:    req.TemplateKey,
 		ScheduledAt:    req.ScheduledAt,
 		IdempotencyKey: idempotencyKey,
+		TenantID:       tenantID,
 	}
 
-	// Set tenant context from header
-	if tenantIDStr := c.Get("X-Tenant-Id"); tenantIDStr != "" {
-		if tid, err := uuid.Parse(tenantIDStr); err == nil {
-			notification.TenantID = &tid
+	// Explicit provider selection: validate it exists, is accessible under the
+	// current tenant scope, and matches the notification channel. When set, the
+	// send pipeline uses ONLY this provider (failover is disabled for this send).
+	if req.ProviderID != "" {
+		providerUUID, perr := uuid.Parse(req.ProviderID)
+		if perr != nil {
+			return response.BadRequest(c, "INVALID_PROVIDER_ID", "providerId is not a valid UUID")
 		}
+		provider, perr := h.service.GetProviderByID(c.Context(), providerUUID)
+		if perr != nil || provider == nil {
+			return response.BadRequest(c, "PROVIDER_NOT_FOUND", "The selected provider does not exist or is not accessible in the current tenant context.")
+		}
+		if provider.Channel != string(channel) {
+			return response.BadRequest(c, "PROVIDER_CHANNEL_MISMATCH", "The selected provider channel does not match the notification channel.")
+		}
+		if !provider.IsEnabled || provider.Status == models.ProviderStatusDisabled {
+			return response.BadRequest(c, "PROVIDER_DISABLED", "The selected provider is disabled.")
+		}
+		notification.ProviderID = &providerUUID
 	}
+
+	// Merge template variables into metadata (see mergeVariablesIntoMetadata).
+	mergeVariablesIntoMetadata(req)
 
 	if req.Metadata != nil {
 		metadataJSON, _ := json.Marshal(req.Metadata)
@@ -628,6 +808,7 @@ func (h *NotificationHandler) CreateNotification(c *fiber.Ctx) error {
 		Subject:        notification.Subject,
 		Body:           notification.Body,
 		Locale:         notification.Locale,
+		ProviderID:     notification.ProviderID,
 		CreatedAt:      notification.CreatedAt,
 	}
 
@@ -680,6 +861,42 @@ func (h *NotificationHandler) CreateBatchNotifications(c *fiber.Ctx) error {
 			ScheduledAt:    notifReq.ScheduledAt,
 			IdempotencyKey: notifReq.IdempotencyKey,
 		}
+
+		// Explicit provider selection: validate + persist (no failover when set)
+		if notifReq.ProviderID != "" {
+			providerUUID, perr := uuid.Parse(notifReq.ProviderID)
+			if perr != nil {
+				return response.BadRequest(c, "INVALID_PROVIDER_ID", "providerId is not a valid UUID")
+			}
+			provider, perr := h.service.GetProviderByID(c.Context(), providerUUID)
+			if perr != nil || provider == nil {
+				return response.BadRequest(c, "PROVIDER_NOT_FOUND", "The selected provider does not exist or is not accessible in the current tenant context.")
+			}
+			if provider.Channel != string(notification.Type) {
+				return response.BadRequest(c, "PROVIDER_CHANNEL_MISMATCH", "The selected provider channel does not match the notification channel.")
+			}
+			if !provider.IsEnabled || provider.Status == models.ProviderStatusDisabled {
+				return response.BadRequest(c, "PROVIDER_DISABLED", "The selected provider is disabled.")
+			}
+			notification.ProviderID = &providerUUID
+		}
+
+		// Tenant scope per item: explicit tenantId wins, else X-Tenant-Id header.
+		// An invalid tenant UUID is rejected just like single-create.
+		if notifReq.TenantID != "" && notifReq.TenantID != "all" && notifReq.TenantID != "default" {
+			tid, err := uuid.Parse(notifReq.TenantID)
+			if err != nil {
+				return response.BadRequest(c, "INVALID_TENANT_ID", "tenantId is not a valid tenant UUID")
+			}
+			notification.TenantID = &tid
+		} else if tenantIDStr := c.Get("X-Tenant-Id"); tenantIDStr != "" {
+			if tid, err := uuid.Parse(tenantIDStr); err == nil {
+				notification.TenantID = &tid
+			}
+		}
+
+		// Merge template variables into metadata (same contract as single create).
+		mergeVariablesIntoMetadata(&notifReq)
 
 		if notifReq.Metadata != nil {
 			metadataJSON, _ := json.Marshal(notifReq.Metadata)

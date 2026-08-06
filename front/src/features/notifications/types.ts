@@ -47,6 +47,12 @@ export interface NotificationDelivery {
   maxAttempts: number;
   lastError?: string;
   nextRetryAt?: string;
+  recipientEmail?: string;
+  recipientPhone?: string;
+  recipientId?: string;
+  subject?: string;
+  body?: string;
+  completedAt?: string;
   createdAt: string;
   updatedAt: string;
   attempts: DeliveryAttempt[];

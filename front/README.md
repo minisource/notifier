@@ -63,7 +63,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3004](http://localhost:3004) in your browser.
 
 ### Build
 
@@ -87,7 +87,7 @@ Copy `.env.example` to `.env.local` and configure:
 
 ```env
 NEXT_PUBLIC_APP_NAME=Notifier Admin
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=http://localhost:3004
 NEXT_PUBLIC_API_URL=http://localhost:9002/api
 ```
 

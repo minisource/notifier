@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,9 +10,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
-import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+} from '@minisource/ui';
+import { Button } from '@minisource/ui';
+import { ConfirmDialog } from '@minisource/ui';
 import { MoreHorizontal, Eye, Copy, RotateCcw, XCircle, CheckCheck, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRetryNotification, useCancelNotification, useMarkNotificationRead } from '../hooks/use-notifications';
@@ -38,9 +38,7 @@ function canMarkRead(notification: Notification): boolean {
 
 export function NotificationActionMenu({ notification, showView = true, onView }: NotificationActionMenuProps) {
   const t = useTranslations();
-  const params = useParams();
   const router = useRouter();
-  const locale = (params?.locale as string) || 'fa';
   const [confirmAction, setConfirmAction] = useState<'retry' | 'cancel' | null>(null);
 
   const retryMutation = useRetryNotification();
@@ -56,7 +54,7 @@ export function NotificationActionMenu({ notification, showView = true, onView }
     if (onView) {
       onView();
     } else {
-      router.push(`/${locale}/notifications/${notification.id}`);
+      router.push(`/notifications/${notification.id}`);
     }
   };
 
@@ -80,7 +78,7 @@ export function NotificationActionMenu({ notification, showView = true, onView }
             </DropdownMenuItem>
           )}
 
-          <DropdownMenuItem onClick={() => router.push(`/${locale}/notifications/${notification.id}`)}>
+          <DropdownMenuItem onClick={() => router.push(`/notifications/${notification.id}`)}>
             <ExternalLink className="ml-2 h-4 w-4" />
             {t('notifications.actions.open_detail')}
           </DropdownMenuItem>

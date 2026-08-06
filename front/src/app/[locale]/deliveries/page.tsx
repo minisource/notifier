@@ -3,31 +3,42 @@
 import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { PageHeader } from '@/components/shared/page-header';
-import { PageContainer } from '@/components/shared/page-container';
-import { SectionCard } from '@/components/shared/section-card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
+import { PageHeader } from '@minisource/ui';
+import { Card } from '@minisource/ui';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@minisource/ui';
+import { Button } from '@minisource/ui';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { ChannelBadge } from '@/components/shared/channel-badge';
-import { EmptyState } from '@/components/shared/empty-state';
-import { ErrorState } from '@/components/shared/error-state';
-import { TableSkeleton } from '@/components/shared/loading-state';
-import { Pagination } from '@/components/shared/pagination';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Truck, RefreshCw } from 'lucide-react';
+import { EmptyState } from '@minisource/ui';
+import { ErrorState } from '@minisource/ui';
+import { Skeleton } from '@minisource/ui';
+import { Pagination } from '@minisource/ui';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@minisource/ui';
+import { Truck, RefreshCw, Eye, Mail, MessageSquare, Smartphone, Webhook, Server } from 'lucide-react';
 import { useDeliveries } from '@/features/deliveries/hooks/use-deliveries';
-import { shortId } from '@/lib/utils/format';
+import { shortId, maskEmail, maskPhone } from '@/lib/utils/format';
+import { formatRelativeTime, formatDateTime } from '@/lib/utils/date';
 
 const PAGE_SIZE = 20;
 const STATUS_OPTIONS = ['all', 'delivered', 'failed', 'processing', 'dead', 'retrying'];
 const PROVIDER_OPTIONS = ['all', 'smtp', 'kavenegar', 'fcm', 'sendgrid', 'apns'];
 
+const providerIcons: Record<string, React.ElementType> = {
+  smtp: Mail,
+  sendgrid: Mail,
+  kavenegar: MessageSquare,
+  twilio: MessageSquare,
+  fcm: Smartphone,
+  apns: Smartphone,
+  push: Smartphone,
+  webhook: Webhook,
+};
+
 export default function DeliveriesPage() {
   const t = useTranslations();
   const params = useParams();
   const router = useRouter();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
   const isRtl = locale === 'fa';
 
   const [page, setPage] = useState(1);
@@ -36,26 +47,38 @@ export default function DeliveriesPage() {
 
   const { data, isLoading, isError, error, refetch, isFetching } = useDeliveries();
 
-  // Client-side filter since mock data doesn't support server-side
+  // Client-side filter
   const allDeliveries = data || [];
   let filtered = [...allDeliveries];
   if (statusFilter !== 'all') filtered = filtered.filter(d => d.status === statusFilter);
   if (providerFilter !== 'all') filtered = filtered.filter(d => d.provider === providerFilter);
+  const hasActiveFilters = statusFilter !== 'all' || providerFilter !== 'all';
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setProviderFilter('all');
+    setPage(1);
+  };
+
+  const getProviderIcon = (provider: string) => {
+    const Icon = providerIcons[provider.toLowerCase()] || Server;
+    return <Icon className="h-3.5 w-3.5 text-muted-foreground" />;
+  };
+
   return (
-    <PageContainer>
-      <PageHeader title={t('deliveries.title')} subtitle={t('deliveries.subtitle')}>
+    <div className="space-y-6">
+      <PageHeader title={t('deliveries.title')} description={t('deliveries.subtitle')}>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={`ml-1.5 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
           {t('dashboard.view_all') as string}
         </Button>
       </PageHeader>
 
-      <SectionCard title={t('deliveries.title')}>
+      <Card title={t('deliveries.title')}>
         {isLoading ? (
-          <TableSkeleton rows={8} columns={6} context="deliveries" />
+          <Skeleton className="h-64 w-full" />
         ) : isError ? (
           <ErrorState
             title={t('errors.generic')}
@@ -67,7 +90,7 @@ export default function DeliveriesPage() {
           <div className="space-y-4">
             {/* Filters */}
             <div className="flex flex-wrap items-center gap-2" dir={isRtl ? 'rtl' : 'ltr'}>
-              <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+              <Select value={statusFilter} onValueChange={(v: string) => { setStatusFilter(v); setPage(1); }}>
                 <SelectTrigger className="w-[140px]">
                   <SelectValue placeholder={t('common.all') as string} />
                 </SelectTrigger>
@@ -80,7 +103,7 @@ export default function DeliveriesPage() {
                 </SelectContent>
               </Select>
 
-              <Select value={providerFilter} onValueChange={(v) => { setProviderFilter(v); setPage(1); }}>
+              <Select value={providerFilter} onValueChange={(v: string) => { setProviderFilter(v); setPage(1); }}>
                 <SelectTrigger className="w-[140px]">
                   <SelectValue placeholder={t('deliveries.provider') as string} />
                 </SelectTrigger>
@@ -101,12 +124,15 @@ export default function DeliveriesPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[180px]">{t('notifications.list.notification')}</TableHead>
-                        <TableHead className="w-[100px]">{t('deliveries.provider')}</TableHead>
+                        <TableHead className="w-[200px]">{t('notifications.list.notification')}</TableHead>
+                        <TableHead className="w-[140px]">{t('common.recipient')}</TableHead>
+                        <TableHead className="w-[110px]">{t('deliveries.provider')}</TableHead>
                         <TableHead className="w-[80px]">{t('common.channel')}</TableHead>
                         <TableHead className="w-[100px]">{t('common.status')}</TableHead>
                         <TableHead className="w-[80px]">{t('deliveries.attempts')}</TableHead>
-                        <TableHead className="w-[100px]">{t('deliveries.last_error')}</TableHead>
+                        <TableHead className="w-[120px]">{t('deliveries.next_retry')}</TableHead>
+                        <TableHead className="w-[160px]">{t('deliveries.last_error')}</TableHead>
+                        <TableHead className="w-[110px]">{t('common.updated_at')}</TableHead>
                         <TableHead className="w-[48px]"></TableHead>
                       </TableRow>
                     </TableHeader>
@@ -115,13 +141,32 @@ export default function DeliveriesPage() {
                         <TableRow
                           key={delivery.id}
                           className="cursor-pointer"
-                          onClick={() => router.push(`/${locale}/deliveries/${delivery.id}`)}
+                          onClick={() => router.push(`/deliveries/${delivery.id}`)}
                         >
                           <TableCell>
-                            <code className="text-xs font-mono">{shortId(delivery.notificationId)}</code>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">{delivery.subject || t('notifications.list.notification')}</p>
+                              <code className="text-xs font-mono text-muted-foreground">{shortId(delivery.notificationId)}</code>
+                            </div>
                           </TableCell>
                           <TableCell>
-                            <span className="text-sm capitalize">{delivery.provider}</span>
+                            {delivery.recipientEmail || delivery.recipientPhone || delivery.recipientId ? (
+                              <span className="block truncate text-xs font-mono text-muted-foreground">
+                                {delivery.recipientEmail
+                                  ? maskEmail(delivery.recipientEmail)
+                                  : delivery.recipientPhone
+                                    ? maskPhone(delivery.recipientPhone)
+                                    : shortId(delivery.recipientId ?? '')}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <span className="inline-flex items-center gap-1.5 text-sm capitalize">
+                              {getProviderIcon(delivery.provider)}
+                              {delivery.provider || '—'}
+                            </span>
                           </TableCell>
                           <TableCell>
                             <ChannelBadge channel={delivery.channel} size="sm" />
@@ -135,13 +180,37 @@ export default function DeliveriesPage() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <span className="text-sm text-muted-foreground truncate block max-w-[200px]">
-                              {delivery.lastError || '—'}
+                            {delivery.nextRetryAt ? (
+                              <span className="text-xs text-muted-foreground whitespace-nowrap" title={formatDateTime(delivery.nextRetryAt, locale)}>
+                                {formatRelativeTime(delivery.nextRetryAt, locale)}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {delivery.lastError ? (
+                              <span className="block truncate text-xs text-muted-foreground" title={delivery.lastError}>
+                                {delivery.lastError}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap" title={formatDateTime(delivery.updatedAt, locale)}>
+                              {formatRelativeTime(delivery.updatedAt, locale)}
                             </span>
                           </TableCell>
-                          <TableCell onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" onClick={() => router.push(`/${locale}/deliveries/${delivery.id}`)}>
-                              {t('common.view_details') as string} →
+                          <TableCell onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title={t('common.view_details') as string}
+                              onClick={() => router.push(`/deliveries/${delivery.id}`)}
+                            >
+                              <Eye className="h-3.5 w-3.5" />
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -160,17 +229,23 @@ export default function DeliveriesPage() {
               <EmptyState
                 icon={Truck}
                 title={t('deliveries.no_deliveries')}
-                description="Delivery logs show the status and history of each notification attempt. They appear automatically when notifications are sent."
-                tips={[
-                  'Send a notification to see its delivery logs',
-                  'Filter by status to find failed or retrying deliveries',
-                  'Click on a delivery to view detailed attempt history',
-                ]}
+                description={hasActiveFilters
+                  ? 'No deliveries match the selected filters.'
+                  : 'Delivery logs show the status and history of each notification attempt. They appear automatically when notifications are sent.'}
+                actionLabel={hasActiveFilters ? t('common.clear') : undefined}
+                onAction={hasActiveFilters ? clearFilters : undefined}
+                tips={hasActiveFilters
+                  ? ['Clear the filters to see all deliveries']
+                  : [
+                      'Send a notification to see its delivery logs',
+                      'Filter by status to find failed or retrying deliveries',
+                      'Click on a delivery to view detailed attempt history',
+                    ]}
               />
             )}
           </div>
         )}
-      </SectionCard>
-    </PageContainer>
+      </Card>
+    </div>
   );
 }

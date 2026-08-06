@@ -3,13 +3,12 @@
 import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { PageHeader } from '@/components/shared/page-header';
-import { PageContainer } from '@/components/shared/page-container';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PageHeader } from '@minisource/ui';
+import { Card, CardContent, CardHeader, CardTitle } from '@minisource/ui';
+import { Button } from '@minisource/ui';
+import { Input } from '@minisource/ui';
+import { Label } from '@minisource/ui';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@minisource/ui';
 import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
 import { createReminder } from '@/features/reminders/api';
@@ -21,10 +20,10 @@ export default function NewReminderPage() {
   const t = useTranslations();
   const router = useRouter();
   const params = useParams();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
   const isRtl = locale === 'fa';
 
-  const [userId, setUserId] = useState('user-mock-001');
+  const [userId, setUserId] = useState('');
   const [type, setType] = useState('email');
   const [recipientEmail, setRecipientEmail] = useState('');
   const [recipientPhone, setRecipientPhone] = useState('');
@@ -50,7 +49,7 @@ export default function NewReminderPage() {
       };
       await createReminder(input);
       toast.success(t('reminders.title') as string, { description: t('reminders.schedule') as string });
-      router.push(`/${locale}/reminders`);
+      router.push(`/reminders`);
     } catch {
       toast.error(t('errors.generic'));
     } finally {
@@ -59,9 +58,9 @@ export default function NewReminderPage() {
   };
 
   return (
-    <PageContainer>
+    <div className="space-y-6">
       <PageHeader title={t('reminders.new_title')}>
-        <Button variant="ghost" onClick={() => router.push(`/${locale}/reminders`)}>
+        <Button variant="ghost" onClick={() => router.push(`/reminders`)}>
           <ArrowLeft className="ml-2 h-4 w-4" />
           {t('common.back')}
         </Button>
@@ -75,7 +74,7 @@ export default function NewReminderPage() {
           {/* User */}
           <div className="space-y-2">
             <Label>User ID</Label>
-            <Input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="user-mock-001" />
+            <Input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="e.g. user-1234" />
           </div>
 
           {/* Type */}
@@ -127,12 +126,12 @@ export default function NewReminderPage() {
             <Button onClick={handleSubmit} disabled={saving || !scheduledAt}>
               {saving ? t('common.loading') : t('reminders.schedule')}
             </Button>
-            <Button variant="outline" onClick={() => router.push(`/${locale}/reminders`)}>
+            <Button variant="outline" onClick={() => router.push(`/reminders`)}>
               {t('common.cancel')}
             </Button>
           </div>
         </CardContent>
       </Card>
-    </PageContainer>
+    </div>
   );
 }

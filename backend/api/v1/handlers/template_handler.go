@@ -34,6 +34,16 @@ func (h *TemplateHandler) CreateTemplate(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_REQUEST", i18n.T(c.Context(), "errors.invalid_request"))
 	}
 
+	if req.Name == "" {
+		return response.BadRequest(c, "INVALID_NAME", "Template name is required")
+	}
+	if req.Type == "" {
+		return response.BadRequest(c, "INVALID_TYPE", "Template type is required")
+	}
+	if req.Type != "sms" && req.Body == "" {
+		return response.BadRequest(c, "INVALID_BODY", "Template body is required for non-SMS templates")
+	}
+
 	template := &models.NotificationTemplate{
 		Key:              req.Key,
 		Name:             req.Name,
@@ -53,6 +63,14 @@ func (h *TemplateHandler) CreateTemplate(c *fiber.Ctx) error {
 		}
 	} else {
 		template.Variables = "[]"
+	}
+
+	if req.ProviderTemplates != nil {
+		if err := template.SetProviderTemplates(req.ProviderTemplates); err != nil {
+			return response.BadRequest(c, "INVALID_PROVIDER_TEMPLATES", "Invalid provider templates format")
+		}
+	} else {
+		template.ProviderTemplates = "[]"
 	}
 
 	result, err := h.templateService.CreateTemplate(c.Context(), template)
@@ -172,6 +190,16 @@ func (h *TemplateHandler) UpdateTemplate(c *fiber.Ctx) error {
 		return response.BadRequest(c, "INVALID_REQUEST", i18n.T(c.Context(), "errors.invalid_request"))
 	}
 
+	if req.Name == "" {
+		return response.BadRequest(c, "INVALID_NAME", "Template name is required")
+	}
+	if req.Type == "" {
+		return response.BadRequest(c, "INVALID_TYPE", "Template type is required")
+	}
+	if req.Type != "sms" && req.Body == "" {
+		return response.BadRequest(c, "INVALID_BODY", "Template body is required for non-SMS templates")
+	}
+
 	updates := &models.NotificationTemplate{
 		Key:              req.Key,
 		Name:             req.Name,
@@ -188,6 +216,12 @@ func (h *TemplateHandler) UpdateTemplate(c *fiber.Ctx) error {
 	if req.Variables != nil {
 		if err := updates.SetVariables(req.Variables); err != nil {
 			return response.BadRequest(c, "INVALID_VARIABLES", "Invalid variables format")
+		}
+	}
+
+	if req.ProviderTemplates != nil {
+		if err := updates.SetProviderTemplates(req.ProviderTemplates); err != nil {
+			return response.BadRequest(c, "INVALID_PROVIDER_TEMPLATES", "Invalid provider templates format")
 		}
 	}
 

@@ -3,33 +3,28 @@
 import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { PageHeader } from '@/components/shared/page-header';
-import { PageContainer } from '@/components/shared/page-container';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from 'sonner';
+import { PageHeader, Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Textarea, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, toast } from '@minisource/ui';
 import { ArrowLeft, Plus, X } from 'lucide-react';
 import { createTemplate } from '@/features/templates/api';
-import type { CreateTemplateInput } from '@/features/templates/types';
+import type { CreateTemplateInput, ProviderTemplateMap } from '@/features/templates/types';
+import { ProviderTemplatesEditor } from '@/features/templates/components/provider-templates-editor';
 
 export default function NewTemplatePage() {
   const t = useTranslations();
   const router = useRouter();
   const params = useParams();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
   const isRtl = locale === 'fa';
 
   const [name, setName] = useState('');
+  const [key, setKey] = useState('');
   const [type, setType] = useState('email');
   const [templateLocale, setTemplateLocale] = useState('fa');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [description, setDescription] = useState('');
   const [variables, setVariables] = useState<string[]>([]);
+  const [providerTemplates, setProviderTemplates] = useState<ProviderTemplateMap[]>([]);
   const [newVariable, setNewVariable] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -46,36 +41,39 @@ export default function NewTemplatePage() {
   };
 
   const handleSubmit = async () => {
-    if (!name.trim() || !body.trim()) {
-      toast.error(t('forms.required'));
+    const isSms = type === 'sms';
+    if (!name.trim() || (!isSms && !body.trim())) {
+      toast.error(t('forms.required') || 'Name and Body are required');
       return;
     }
 
     setSaving(true);
     try {
       const input: CreateTemplateInput = {
+        key: key.trim() || undefined,
         name: name.trim(),
         type,
         locale: templateLocale as 'fa' | 'en',
         subject: subject.trim() || undefined,
-        body: body.trim(),
+        body: body.trim() || undefined,
         description: description.trim() || undefined,
         variables: variables.length > 0 ? variables : undefined,
+        providerTemplates: providerTemplates.length > 0 ? providerTemplates : undefined,
       };
       await createTemplate(input);
-      toast.success(t('templates.title') as string, { description: t('common.save') as string });
-      router.push(`/${locale}/templates`);
+      toast.success(t('templates.title') as string, t('common.save') as string);
+      router.push(`/templates`);
     } catch {
-      toast.error(t('errors.generic'));
+      toast.error(t('errors.generic') || 'An error occurred');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <PageContainer>
+    <div className="space-y-6">
       <PageHeader title={t('templates.new_title')}>
-        <Button variant="ghost" onClick={() => router.push(`/${locale}/templates`)}>
+        <Button variant="ghost" onClick={() => router.push(`/templates`)}>
           <ArrowLeft className="ml-2 h-4 w-4" />
           {t('common.back')}
         </Button>
@@ -86,10 +84,16 @@ export default function NewTemplatePage() {
           <CardTitle>{t('templates.new_title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Name */}
-          <div className="space-y-2">
-            <Label>{t('templates.name')} *</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., OTP via SMS" />
+          {/* Name & Key */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>{t('templates.name')} *</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., OTP via SMS" />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('templates.key') || 'Programmatic Key'}</Label>
+              <Input value={key} onChange={(e) => setKey(e.target.value)} placeholder="e.g., auth.otp" />
+            </div>
           </div>
 
           {/* Type + Locale */}
@@ -130,19 +134,21 @@ export default function NewTemplatePage() {
           </div>
 
           {/* Subject */}
-          <div className="space-y-2">
-            <Label>{t('notifications.subject')}</Label>
-            <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Notification subject line..." />
-          </div>
+          {type !== 'sms' && (
+            <div className="space-y-2">
+              <Label>{t('notifications.subject')}</Label>
+              <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Notification subject line..." />
+            </div>
+          )}
 
           {/* Body */}
           <div className="space-y-2">
-            <Label>{t('notifications.body')} *</Label>
+            <Label>{t('notifications.body')}{type !== 'sms' ? ' *' : ''}</Label>
             <Textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Enter template body with {{variables}}..."
-              className="min-h-[200px] font-mono text-sm"
+              placeholder={type === 'sms' ? 'Optional body for SMS. E.g., Your code is {{code}}' : 'Enter template body with {{variables}}...'}
+              className="min-h-[150px] font-mono text-sm"
             />
           </div>
 
@@ -174,17 +180,25 @@ export default function NewTemplatePage() {
             )}
           </div>
 
+          {/* Provider Templates Editor */}
+          <div className="border-t pt-4 mt-2">
+            <ProviderTemplatesEditor
+              value={providerTemplates}
+              onChange={setProviderTemplates}
+            />
+          </div>
+
           {/* Actions */}
           <div className="flex items-center gap-3 pt-2" dir={isRtl ? 'rtl' : 'ltr'}>
-            <Button onClick={handleSubmit} disabled={saving || !name.trim() || !body.trim()}>
+            <Button onClick={handleSubmit} disabled={saving || !name.trim() || (type !== 'sms' && !body.trim())}>
               {saving ? t('common.loading') : t('common.save')}
             </Button>
-            <Button variant="outline" onClick={() => router.push(`/${locale}/templates`)}>
+            <Button variant="outline" onClick={() => router.push(`/templates`)}>
               {t('common.cancel')}
             </Button>
           </div>
         </CardContent>
       </Card>
-    </PageContainer>
+    </div>
   );
 }

@@ -7,7 +7,7 @@ export type NotificationChannel = 'sms' | 'email' | 'push' | 'in_app' | 'webhook
 export type NotificationStatus = 'pending' | 'queued' | 'processing' | 'sent' | 'delivered' | 'failed' | 'retrying' | 'dead' | 'cancelled' | 'canceled';
 export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type RecipientType = 'email' | 'phone' | 'user_id' | 'device_token' | 'webhook_url';
-export type ProviderStatus = 'healthy' | 'degraded' | 'down' | 'disabled' | 'unknown';
+export type ProviderStatus = 'healthy' | 'degraded' | 'down' | 'disabled' | 'unsupported' | 'unknown';
 export type DeliveryStatus = 'pending' | 'processing' | 'sent' | 'delivered' | 'failed' | 'retrying' | 'dead' | 'read' | 'seen' | 'clicked';
 export type ReminderStatus = 'scheduled' | 'processing' | 'sent' | 'cancelled' | 'failed';
 export type TemplateLocale = 'fa' | 'en';
@@ -141,7 +141,9 @@ export interface DeliveryAttempt {
   errorMessage?: string;
   errorCode?: string;
   providerResponse?: string;
+  providerResponseSanitized?: string;
   processingTimeMs: number;
+  latencyMs?: number;
   createdAt: string;
   completedAt?: string;
 }
@@ -155,7 +157,14 @@ export interface NotificationDelivery {
   attemptCount: number;
   maxAttempts: number;
   lastError?: string;
+  lastErrorMessage?: string;
   nextRetryAt?: string;
+  recipientEmail?: string;
+  recipientPhone?: string;
+  recipientId?: string;
+  subject?: string;
+  body?: string;
+  completedAt?: string;
   createdAt: string;
   updatedAt: string;
   attempts: DeliveryAttempt[];
@@ -174,6 +183,7 @@ export interface ListDeliveriesParams extends PaginationParams {
 
 export interface Provider {
   id: string;
+  tenantId?: string;
   name: string;
   channel: NotificationChannel;
   type?: string;
@@ -184,30 +194,363 @@ export interface Provider {
   lastFailure?: string;
   isEnabled: boolean;
   isPrimary?: boolean;
+  isDefault?: boolean;
   priority: number;
   config?: Record<string, unknown>;
 }
 
-export interface ProviderHealth {
-  provider: string;
+export interface ProviderHealthItem {
+  providerId?: string;
+  name: string;
   channel: NotificationChannel;
+  type?: string;
   status: ProviderStatus;
-  successRate: number;
+  successRate?: number;
   latencyMs?: number;
-  lastChecked?: string;
+  message?: string;
   error?: string;
+  checkedAt?: string;
+}
+
+export interface ProviderHealthResponse {
+  providers: ProviderHealthItem[];
+  healthyCount: number;
+  degradedCount: number;
+  downCount: number;
+  disabledCount: number;
+  checkedAt: string;
 }
 
 export interface ProviderTestInput {
   recipient?: string;
+  subject?: string;
   body?: string;
+  dryRun?: boolean;
 }
 
 export interface ProviderTestResult {
+  providerId: string;
+  channel?: string;
+  dryRun: boolean;
   success: boolean;
+  status: string;
   message?: string;
-  error?: string;
-  processingTimeMs?: number;
+  providerMessageId?: string;
+  providerResponseSanitized?: string;
+  latencyMs?: number;
+  checkedAt: string;
+}
+
+// ==================== Provider Attempts (request lifecycle logging) ====================
+
+export type ProviderAttemptStatus =
+  | 'queued'
+  | 'preparing'
+  | 'sending'
+  | 'accepted'
+  | 'pending'
+  | 'delivered'
+  | 'failed'
+  | 'rejected'
+  | 'timed_out'
+  | 'cancelled'
+  | 'bounced'
+  | 'complained'
+  | 'unknown';
+
+export type ProviderErrorKind =
+  | 'configuration'
+  | 'invalid_recipient'
+  | 'invalid_message'
+  | 'provider'
+  | 'rate_limited'
+  | 'timeout'
+  | 'network'
+  | 'authentication'
+  | 'cancelled'
+  | 'unknown';
+
+export interface ProviderAttemptSummary {
+  id: string;
+  notificationId: string;
+  providerAccountId?: string;
+  tenantId?: string;
+  channel: NotificationChannel;
+  provider: string;
+  attemptNumber: number;
+  fallbackSequence: number;
+  status: ProviderAttemptStatus | string;
+  providerStatus?: string;
+  providerMessageId?: string;
+  recipientMasked?: string;
+  responseStatusCode?: number;
+  durationMs?: number;
+  retryable: boolean;
+  normalizedErrorKind?: string;
+  normalizedErrorCode?: string;
+  requestId?: string;
+  correlationId?: string;
+  traceId?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface ProviderAttemptEvent {
+  id: string;
+  attemptId: string;
+  eventType: string;
+  previousStatus?: string;
+  newStatus?: string;
+  eventPayloadSanitized?: Record<string, unknown>;
+  source?: string;
+  requestId?: string;
+  correlationId?: string;
+  traceId?: string;
+  occurredAt: string;
+}
+
+export interface ProviderAttemptDetails extends ProviderAttemptSummary {
+  parentAttemptId?: string;
+  requestMethod?: string;
+  requestUrlSanitized?: string;
+  requestHeadersSanitized?: Record<string, string>;
+  requestBodySanitized?: string;
+  requestSizeBytes?: number;
+  responseHeadersSanitized?: Record<string, string>;
+  responseBodySanitized?: string;
+  responseSizeBytes?: number;
+  bodyTruncated: boolean;
+  originalSizeBytes?: number;
+  capturedSizeBytes?: number;
+  contentHash?: string;
+  bodyPreview?: string;
+  providerErrorCode?: string;
+  normalizedErrorMessage?: string;
+  queuedAt: string;
+  startedAt?: string;
+  timeoutMs?: number;
+  spanId?: string;
+  events?: ProviderAttemptEvent[];
+}
+
+export interface ListProviderAttemptsParams extends PaginationParams {
+  notificationId?: string;
+  channel?: NotificationChannel;
+  provider?: string;
+  status?: ProviderAttemptStatus | string;
+  providerMessageId?: string;
+  requestId?: string;
+  correlationId?: string;
+  from?: string;
+  to?: string;
+}
+
+export interface ProviderAttemptListResponse {
+  items: ProviderAttemptSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+// ==================== Global Outbound Delivery Pause / Emergency Freeze ====================
+
+export type DeliveryControlState =
+  | 'active'
+  | 'pause_requested'
+  | 'paused'
+  | 'resume_requested'
+  | 'active_with_uncertain_attempts';
+
+export type DeliveryControlMode = 'immediate' | 'drain';
+
+export interface DeliveryControlStatus {
+  state: DeliveryControlState;
+  mode: DeliveryControlMode;
+  reason?: string;
+  pausedBy?: string;
+  pausedAt?: string;
+  effectiveAt?: string;
+  expiresAt?: string;
+  resumedBy?: string;
+  resumedAt?: string;
+  version: number;
+  heldCount: number;
+  retryingHeld: number;
+  uncertainCount: number;
+  activeAttemptCount: number;
+  canPause: boolean;
+  canResume: boolean;
+  lastUpdatedAt: string;
+}
+
+export interface DeliveryControlEvent {
+  id: string;
+  action: string;
+  actor?: string;
+  reason?: string;
+  mode?: string;
+  fromState?: string;
+  toState?: string;
+  version: number;
+  requestId?: string;
+  createdAt: string;
+}
+
+export interface PauseDeliveriesInput {
+  mode?: DeliveryControlMode;
+  reason: string;
+  expiresAt?: string;
+  /** Caller's last-known control version. Stale submissions return 409. */
+  expectedVersion?: number;
+}
+
+export interface ResumeDeliveriesInput {
+  reason?: string;
+  /** Caller's last-known control version. Stale submissions return 409. */
+  expectedVersion?: number;
+}
+
+export interface HeldDelivery {
+  id: string;
+  tenantId?: string;
+  userId: string;
+  type: NotificationChannel;
+  status: NotificationStatus;
+  priority: NotificationPriority;
+  recipientEmail?: string;
+  recipientPhone?: string;
+  subject?: string;
+  body: string;
+  provider?: string;
+  pauseVersion?: number;
+  heldReason?: string;
+  heldAt?: string;
+  retryCount: number;
+  maxRetries: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HeldDeliveriesResponse {
+  items: HeldDelivery[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+// ==================== Provider Balance / Quota / Credit Alerting ====================
+
+export type ProviderHealthLevel =
+  | 'healthy' | 'warning' | 'critical' | 'exhausted'
+  | 'stale' | 'unavailable' | 'disabled' | 'unsupported';
+
+export type BalanceCapabilityMode =
+  | 'automatic_balance' | 'manual_balance' | 'estimated_from_usage'
+  | 'status_only' | 'unsupported';
+
+export interface ProviderAccountHealthSummary {
+  providerId: string;
+  tenantId?: string;
+  provider: string;
+  channel?: string;
+  capabilityMode: BalanceCapabilityMode | string;
+  healthLevel: ProviderHealthLevel | string;
+  latestAlertLevel?: string;
+  balanceValue?: number | null;
+  balanceUnit?: string;
+  currency?: string;
+  quotaRemaining?: number | null;
+  quotaLimit?: number | null;
+  usagePercent?: number | null;
+  isEstimated: boolean;
+  isManual: boolean;
+  source?: string;
+  lastSuccessfulRefreshAt?: string;
+  lastRefreshAttemptAt?: string;
+  nextScheduledRefreshAt?: string;
+  consecutiveFailures: number;
+  lastErrorKind?: string;
+  lastErrorMessage?: string;
+  activeAlertCount: number;
+  updatedAt: string;
+}
+
+export interface ProviderBalanceSnapshot {
+  id: string;
+  providerId: string;
+  refreshStatus: 'success' | 'failed' | string;
+  capabilityMode: string;
+  source: string;
+  isEstimated: boolean;
+  isManual: boolean;
+  balanceValue?: number | null;
+  balanceUnit?: string;
+  currency?: string;
+  quotaRemaining?: number | null;
+  quotaLimit?: number | null;
+  usagePercent?: number | null;
+  accountStatus?: string;
+  planExpiresAt?: string;
+  errorKind?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  fetchedAt: string;
+  latencyMs?: number;
+}
+
+export interface CreditAlert {
+  id: string;
+  providerId: string;
+  provider: string;
+  alertType: string;
+  severity: string;
+  status: 'active' | 'acknowledged' | 'resolved' | string;
+  message?: string;
+  balanceValue?: number | null;
+  thresholdValue?: number | null;
+  firstTriggeredAt: string;
+  lastTriggeredAt: string;
+  repeatCount: number;
+  acknowledgedAt?: string;
+  acknowledgedBy?: string;
+  resolvedAt?: string;
+  resolvedReason?: string;
+}
+
+export interface ProviderBalanceSettings {
+  enabled: boolean;
+  warningThreshold?: number | null;
+  criticalThreshold?: number | null;
+  refreshIntervalSec?: number | null;
+}
+
+export interface ProviderBalanceDetail {
+  providerId: string;
+  name: string;
+  channel: string;
+  type?: string;
+  health: ProviderAccountHealthSummary | null;
+  history: ProviderBalanceSnapshot[];
+  alerts: CreditAlert[];
+  settings: ProviderBalanceSettings;
+}
+
+export interface BalanceRefreshResult {
+  providerId: string;
+  name: string;
+  channel: string;
+  capabilityMode: string;
+  success: boolean;
+  healthLevel?: string;
+  balanceValue?: number | null;
+  balanceUnit?: string;
+  currency?: string;
+  errorKind?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  latencyMs?: number;
+  checkedAt: string;
 }
 
 // ==================== Template ====================
@@ -219,11 +562,12 @@ export interface Template {
   type: NotificationChannel;
   locale: TemplateLocale;
   subject?: string;
-  body: string;
+  body?: string;
   description?: string;
   variables?: string[];
   provider?: string;
   providerTemplate?: string;
+  providerTemplates?: any[];
   status?: TemplateStatus;
   isActive: boolean;
   createdAt: string;
@@ -231,15 +575,17 @@ export interface Template {
 }
 
 export interface CreateTemplateInput {
+  key?: string;
   name: string;
   type: NotificationChannel;
   locale: TemplateLocale;
   subject?: string;
-  body: string;
+  body?: string;
   description?: string;
   variables?: string[];
   provider?: string;
   providerTemplate?: string;
+  providerTemplates?: any[];
 }
 
 export interface UpdateTemplateInput extends Partial<CreateTemplateInput> {
@@ -357,10 +703,11 @@ export interface Tenant {
   id: string;
   name: string;
   slug: string;
+  displayName?: string;
+  description?: string;
   isActive: boolean;
+  isDefault?: boolean;
   enabledChannels: string[];
-  monthlyQuota: number;
-  usedThisMonth: number;
   createdAt: string;
 }
 

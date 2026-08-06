@@ -10,7 +10,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/minisource/go-common/logging"
+	"github.com/minisource/go-sdk/auth"
 	"github.com/minisource/notifier/config"
+	"github.com/minisource/notifier/internal/attemptlog"
 	"github.com/minisource/notifier/internal/models"
 	"github.com/minisource/notifier/internal/repository"
 	"github.com/minisource/notifier/internal/websocket"
@@ -26,12 +28,24 @@ type NotificationService struct {
 	logRepo          repository.NotificationLogRepository
 	settingRepo      repository.SettingRepository
 	smsTemplateRepo  repository.SMSTemplateRepository
+	providerRepo     repository.ProviderRepository
+	attemptRepo      repository.ProviderAttemptRepository
+	attemptRecorder  *attemptlog.Recorder
 	worker           *worker.NotificationWorker
 	wsHub            *websocket.Hub
 	preferenceFilter *PreferenceFilter
+	AuthClient       *auth.Client
+	deliveryControl  *DeliveryControlService
 }
 
-func NewNotificationService(
+// NewNotificationServiceWithDeliveryControl creates the service wiring the
+// global outbound delivery pause into the handler adapters (final provider
+// boundary gate).
+//
+// NOTE: the old NewNotificationService constructor (delivery control == nil)
+// was removed deliberately: a nil delivery-control would silently disable the
+// final pause gate (fail-open). All wiring must go through this constructor.
+func NewNotificationServiceWithDeliveryControl(
 	cfg *config.Config,
 	logger logging.Logger,
 	notifRepo repository.NotificationRepository,
@@ -40,8 +54,33 @@ func NewNotificationService(
 	logRepo repository.NotificationLogRepository,
 	settingRepo repository.SettingRepository,
 	smsTemplateRepo repository.SMSTemplateRepository,
+	providerRepo repository.ProviderRepository,
+	attemptRepo repository.ProviderAttemptRepository,
 	worker *worker.NotificationWorker,
 	wsHub *websocket.Hub,
+	authClient *auth.Client,
+	deliveryControl *DeliveryControlService,
+) *NotificationService {
+	return newNotificationService(cfg, logger, notifRepo, templateRepo, prefRepo, logRepo, settingRepo, smsTemplateRepo, providerRepo, attemptRepo, worker, wsHub, authClient, deliveryControl)
+}
+
+// newNotificationService is the internal constructor that also accepts the
+// delivery-control service (used by adapters at the final provider boundary).
+func newNotificationService(
+	cfg *config.Config,
+	logger logging.Logger,
+	notifRepo repository.NotificationRepository,
+	templateRepo repository.NotificationTemplateRepository,
+	prefRepo repository.NotificationPreferenceRepository,
+	logRepo repository.NotificationLogRepository,
+	settingRepo repository.SettingRepository,
+	smsTemplateRepo repository.SMSTemplateRepository,
+	providerRepo repository.ProviderRepository,
+	attemptRepo repository.ProviderAttemptRepository,
+	worker *worker.NotificationWorker,
+	wsHub *websocket.Hub,
+	authClient *auth.Client,
+	deliveryControl *DeliveryControlService,
 ) *NotificationService {
 	return &NotificationService{
 		logger:           logger,
@@ -52,10 +91,41 @@ func NewNotificationService(
 		logRepo:          logRepo,
 		settingRepo:      settingRepo,
 		smsTemplateRepo:  smsTemplateRepo,
+		providerRepo:     providerRepo,
+		attemptRepo:      attemptRepo,
+		attemptRecorder: attemptlog.NewRecorder(
+			attemptRepo,
+			logger,
+			attemptlog.RedactionOptions{
+				MaxBodyBytes:   cfg.ProviderLogs.BodyCaptureMaxBytes,
+				MaxPreviewChars: cfg.ProviderLogs.BodyPreviewMaxChars,
+			},
+			cfg.ProviderLogs.Enabled,
+		),
 		worker:           worker,
 		wsHub:            wsHub,
 		preferenceFilter: NewPreferenceFilter(prefRepo, logger),
+		AuthClient:       authClient,
+		deliveryControl:  deliveryControl,
 	}
+}
+
+// IsDeliveryPaused reports whether the global outbound delivery pause is
+// active. Used by handler adapters as the FINAL gate immediately before a
+// provider call.
+func (s *NotificationService) IsDeliveryPaused(ctx context.Context) bool {
+	if s.deliveryControl == nil {
+		return false
+	}
+	return s.deliveryControl.IsPaused(ctx)
+}
+
+// HoldForPause freezes one delivery (status=held) preserving its retry budget.
+func (s *NotificationService) HoldForPause(ctx context.Context, notificationID uuid.UUID, reason string) error {
+	if s.deliveryControl == nil {
+		return nil
+	}
+	return s.deliveryControl.HoldNotification(ctx, notificationID, reason)
 }
 
 // CreateNotification creates and enqueues a notification
@@ -233,6 +303,11 @@ func (s *NotificationService) CreateNotificationSync(ctx context.Context, notifi
 	sendErr := s.worker.SendNotificationSync(ctx, notification)
 
 	if sendErr != nil {
+		// Pause control errors are NOT provider failures — the worker already
+		// marked the delivery held, so never overwrite it with failed.
+		if errors.Is(sendErr, worker.ErrDeliveryPaused) {
+			return fmt.Errorf("delivery held: %w", sendErr)
+		}
 		s.logger.Error(logging.General, logging.Api, "Failed to send notification (sync)", map[logging.ExtraKey]interface{}{
 			"notificationId": notification.ID,
 			"error":          sendErr.Error(),
@@ -275,6 +350,12 @@ func (s *NotificationService) CreateBatchNotifications(ctx context.Context, noti
 	})
 
 	return successIDs, errors
+}
+
+// GetProviderByID returns a provider row by ID (used to validate explicit
+// provider selection on notification creation).
+func (s *NotificationService) GetProviderByID(ctx context.Context, id uuid.UUID) (*models.Provider, error) {
+	return s.providerRepo.GetByID(ctx, id)
 }
 
 // GetNotification retrieves a notification by ID
@@ -343,38 +424,125 @@ func (s *NotificationService) ListAllNotifications(ctx context.Context, filter r
 	return s.notifRepo.ListAll(ctx, filter)
 }
 
-// RetryNotification retries a failed/dead notification
+// logManualRetry writes an audit entry to notification_logs so operator
+// retries are visible on the notification timeline (same table the worker
+// uses for created/sending/sent/retrying/dead_letter events). Failures are
+// logged but never block the retry itself.
+func (s *NotificationService) logManualRetry(ctx context.Context, notificationID uuid.UUID) {
+	if s.logRepo == nil {
+		return
+	}
+	log := &models.NotificationLog{
+		NotificationID: notificationID,
+		Action:         "manual_retry",
+		Status:         models.NotificationStatusPending,
+		Message:        "Manually requeued for one more delivery attempt",
+	}
+	if err := s.logRepo.Create(ctx, log); err != nil {
+		s.logger.Warn(logging.General, logging.Update, "Failed to record manual retry audit log", map[logging.ExtraKey]interface{}{
+			"notificationId": notificationID,
+			"error":          err.Error(),
+		})
+	}
+}
+
+// RetryNotification retries a failed/dead notification.
+//
+// A manual retry re-queues the SAME notification for exactly ONE more delivery
+// attempt. It never resets retry_count to zero and never grants a fresh
+// automatic-retry budget: retry_count is pinned to max_retries so the worker's
+// handleFailure sees RetryCount >= MaxRetries and goes straight to dead-letter
+// on the next failure. This matches the product rule "just retry the same
+// notification once" — an exhausted notification must not get 3 more retries.
+// The update is atomic (conditional UPDATE), so a concurrent worker write can
+// never be lost, and the audit log entry is written after a successful requeue.
 func (s *NotificationService) RetryNotification(ctx context.Context, notificationID uuid.UUID) error {
 	notif, err := s.notifRepo.GetByID(ctx, notificationID)
 	if err != nil {
 		return fmt.Errorf("notification not found: %w", err)
 	}
 
-	// Validate state: only failed, dead, or retrying (if retries remaining)
+	// Validate state: only terminal states failed/dead can be manually retried.
+	// retrying notifications are already being processed by the worker.
 	switch notif.Status {
 	case models.NotificationStatusFailed, models.NotificationStatusDead:
-		// Valid for retry
-	case models.NotificationStatusRetrying:
-		if notif.RetryCount >= notif.MaxRetries {
-			return fmt.Errorf("notification has exceeded max retries (%d/%d)", notif.RetryCount, notif.MaxRetries)
-		}
-		// Allow retry if still retrying but has remaining attempts
+		// Valid for manual retry
 	default:
-		return fmt.Errorf("cannot retry notification with status '%s': only failed/dead/retrying statuses can be retried", notif.Status)
+		return fmt.Errorf("cannot retry notification with status '%s': only failed/dead statuses can be retried", notif.Status)
 	}
 
-	// Check max retries
-	if notif.RetryCount >= notif.MaxRetries {
-		return fmt.Errorf("notification has exceeded max retries (%d/%d)", notif.RetryCount, notif.MaxRetries)
+	// Atomic conditional update — status must still be failed/dead at write
+	// time, so this is safe against concurrent worker updates.
+	updated, err := s.notifRepo.RetryByID(ctx, notificationID)
+	if err != nil {
+		return fmt.Errorf("failed to retry notification: %w", err)
+	}
+	if !updated {
+		return fmt.Errorf("notification is no longer in a retryable state")
 	}
 
-	// Reset status to pending and increment retry count
-	now := time.Now()
-	notif.Status = models.NotificationStatusPending
-	notif.RetryCount++
-	notif.UpdatedAt = now
+	s.logManualRetry(ctx, notificationID)
+	return nil
+}
 
-	return s.notifRepo.Update(ctx, notif)
+// BulkRetryNotifications retries multiple failed/dead notifications by ID.
+// Each is re-queued for exactly one more attempt (same semantics as
+// RetryNotification). Returns the number of notifications actually requeued;
+// IDs that are not in a retryable state are skipped. Audit log entries are
+// written only for IDs that actually qualified for retry.
+func (s *NotificationService) BulkRetryNotifications(ctx context.Context, ids []uuid.UUID) (int64, error) {
+	if len(ids) == 0 {
+		return 0, fmt.Errorf("no notification ids provided")
+	}
+	s.logger.Debug(logging.General, logging.Update, "Bulk retrying notifications", map[logging.ExtraKey]interface{}{
+		"count": len(ids),
+	})
+
+	// Resolve which ids are currently retryable BEFORE the update (the update
+	// flips them to pending, so they would no longer match afterwards). This
+	// also drives the audit log: only actually-requeued ids get an entry.
+	retryable, err := s.notifRepo.GetRetryableIDs(ctx, ids)
+	if err != nil {
+		return 0, err
+	}
+	if len(retryable) == 0 {
+		return 0, nil
+	}
+
+	retried, err := s.notifRepo.BulkRetry(ctx, retryable)
+	if err != nil {
+		return 0, err
+	}
+
+	for _, id := range retryable {
+		s.logManualRetry(ctx, id)
+	}
+	return retried, nil
+}
+
+// RetryAllFailedNotifications re-queues every failed and dead-letter
+// notification for one more attempt each. Returns the number requeued.
+// Capped at 500 notifications per invocation to bound the size of a single
+// administrative action.
+func (s *NotificationService) RetryAllFailedNotifications(ctx context.Context) (int64, error) {
+	s.logger.Debug(logging.General, logging.Update, "Retrying all failed notifications", nil)
+
+	const maxBatch = 500
+	ids, err := s.notifRepo.GetAllRetryableIDs(ctx, maxBatch)
+	if err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	retried, err := s.notifRepo.BulkRetry(ctx, ids)
+	if err != nil {
+		return 0, err
+	}
+	for _, id := range ids {
+		s.logManualRetry(ctx, id)
+	}
+	return retried, nil
 }
 
 // CancelNotification cancels a pending/queued/retrying notification
@@ -412,6 +580,19 @@ func (s *NotificationService) MarkAsClicked(ctx context.Context, notificationID 
 	return s.notifRepo.MarkAsClicked(ctx, notificationID)
 }
 
+// GetProviderAttemptRecorder returns the shared attempt recorder (provider
+// request lifecycle logging). It is non-nil even when the feature is disabled
+// (Recorder.Enabled gates persistence).
+func (s *NotificationService) GetProviderAttemptRecorder() *attemptlog.Recorder {
+	return s.attemptRecorder
+}
+
+// GetProviderAttemptRepository returns the provider attempt repository for
+// admin/API read access.
+func (s *NotificationService) GetProviderAttemptRepository() repository.ProviderAttemptRepository {
+	return s.attemptRepo
+}
+
 // GetAttemptsFromLogs maps notification logs to attempt-style responses
 func (s *NotificationService) GetAttemptsFromLogs(ctx context.Context, notificationID uuid.UUID) ([]*models.NotificationLog, error) {
 	return s.logRepo.GetByNotificationID(ctx, notificationID)
@@ -446,6 +627,11 @@ func (s *NotificationService) GetByIDempotencyKey(ctx context.Context, key strin
 // GetRepository returns the underlying notification repository for direct access
 func (s *NotificationService) GetRepository() repository.NotificationRepository {
 	return s.notifRepo
+}
+
+// GetConfig returns the service configuration
+func (s *NotificationService) GetConfig() *config.Config {
+	return s.cfg
 }
 
 // MaskEmail masks an email address for PII protection

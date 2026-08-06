@@ -2,24 +2,26 @@
 
 import { useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@minisource/ui';
 import { StatusBadge } from '@/components/shared/status-badge';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@minisource/ui';
 import { formatRelativeTime } from '@/lib/utils/date';
 import { formatMilliseconds } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, Timer, RotateCcw, Server } from 'lucide-react';
 import type { NotificationDelivery } from '../types';
+import type { Delivery as DeliveryFeatureDelivery } from '@/features/deliveries/types';
+import { ProviderErrorHelp } from '@/features/providers/components/provider-error-help';
 
 interface NotificationAttemptsListProps {
-  deliveries: NotificationDelivery[];
+  deliveries: NotificationDelivery[] | DeliveryFeatureDelivery[];
   loading?: boolean;
 }
 
 export function NotificationAttemptsList({ deliveries, loading }: NotificationAttemptsListProps) {
   const t = useTranslations();
   const params = useParams();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
   const isRtl = locale === 'fa';
 
   if (loading) {
@@ -99,9 +101,12 @@ export function NotificationAttemptsList({ deliveries, loading }: NotificationAt
 
                   {/* Error details */}
                   {attempt.errorMessage && (
-                    <div className="w-full mt-1 flex items-start gap-1.5 text-xs">
-                      <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-red-500" />
-                      <span className="text-red-600 dark:text-red-400">{attempt.errorMessage}</span>
+                    <div className="w-full mt-1 text-xs">
+                      <div className="flex items-start gap-1.5">
+                        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-red-500" />
+                        <span className="text-red-600 dark:text-red-400">{attempt.errorMessage}</span>
+                      </div>
+                      <ProviderErrorHelp message={attempt.errorMessage} provider={delivery.provider} notificationId={delivery.notificationId} />
                     </div>
                   )}
 

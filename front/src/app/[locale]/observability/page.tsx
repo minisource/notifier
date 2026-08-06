@@ -2,13 +2,13 @@
 
 import { useTranslations } from 'next-intl';
 import { useState } from 'react';
-import { PageHeader } from '@/components/shared/page-header';
+import { PageHeader } from '@minisource/ui';
 import { RefreshButton } from '@/shared/components/refresh-button';
-import { MetricCard } from '@/components/shared/metric-card';
-import { ErrorState } from '@/components/shared/error-state';
-import { PageSkeleton } from '@/components/shared/loading-state';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { MetricCard } from '@minisource/ui';
+import { ErrorState } from '@minisource/ui';
+import { Skeleton } from '@minisource/ui';
+import { Card, CardContent, CardHeader, CardTitle } from '@minisource/ui';
+import { Button } from '@minisource/ui';
 import {
   Activity, HeartPulse, CheckCircle, XCircle, AlertTriangle,
   Clock, Server, Users, BarChart3, Copy, Check, Loader2, RefreshCw,
@@ -78,12 +78,12 @@ export default function ObservabilityPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  if (loading) return <PageSkeleton context="observability" layout="cards" cards={8} />;
+  if (loading) return <Skeleton className="h-64 w-full" />;
 
   if (fetchError || errorMsg) {
     return (
       <div className="space-y-6">
-        <PageHeader title={t('observability.title')} subtitle={t('observability.subtitle')} />
+        <PageHeader title={t('observability.title')} description={t('observability.subtitle')} />
         <ErrorState message={errorMsg || t('common.error_occurred')} onRetry={handleRefresh} />
       </div>
     );
@@ -126,7 +126,7 @@ export default function ObservabilityPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('observability.title')} subtitle={t('observability.subtitle')}>
+      <PageHeader title={t('observability.title')} description={t('observability.subtitle')}>
         <Button variant="outline" size="sm" onClick={copyDiagnostics}>
           {copied ? <Check className="h-4 w-4 ltr:mr-2 rtl:ml-2" /> : <Copy className="h-4 w-4 ltr:mr-2 rtl:ml-2" />}
           {copied ? t('common.copied') : t('observability.copy_diagnostics')}

@@ -1,16 +1,25 @@
 package email
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/smtp"
 	"strings"
+	"time"
 )
 
 // EmailClient interface for sending emails
 type EmailClient interface {
 	SendEmail(to, subject, body string, isHTML bool) error
+}
+
+// HealthCheckable is implemented by email clients that can verify
+// connectivity/credentials against the real mail server.
+type HealthCheckable interface {
+	Check(ctx context.Context) error
 }
 
 // ProviderConfig holds email provider configuration
@@ -66,6 +75,33 @@ func NewSMTPClient(config *ProviderConfig) (*SMTPClient, error) {
 		return nil, fmt.Errorf("from address is required")
 	}
 	return &SMTPClient{config: config}, nil
+}
+
+// Check verifies SMTP connectivity (and credentials when configured) by
+// dialing the server and completing a handshake + optional AUTH.
+func (c *SMTPClient) Check(ctx context.Context) error {
+	addr := fmt.Sprintf("%s:%d", c.config.Host, c.config.Port)
+
+	dialer := net.Dialer{Timeout: 5 * time.Second}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return fmt.Errorf("smtp dial failed: %w", err)
+	}
+	defer conn.Close()
+
+	client, err := smtp.NewClient(conn, c.config.Host)
+	if err != nil {
+		return fmt.Errorf("smtp handshake failed: %w", err)
+	}
+	defer client.Quit()
+
+	if c.config.Username != "" && c.config.Password != "" {
+		auth := smtp.PlainAuth("", c.config.Username, c.config.Password, c.config.Host)
+		if err := client.Auth(auth); err != nil {
+			return fmt.Errorf("smtp authentication failed: %w", err)
+		}
+	}
+	return nil
 }
 
 // SendEmail sends an email via SMTP

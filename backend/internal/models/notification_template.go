@@ -8,6 +8,13 @@ import (
 	"gorm.io/gorm"
 )
 
+// ProviderTemplateMap represents a mapping of provider template key (with optional tenant scoping)
+type ProviderTemplateMap struct {
+	Provider    string `json:"provider"`
+	TemplateKey string `json:"templateKey"`
+	TenantID    string `json:"tenantId,omitempty"`
+}
+
 // NotificationTemplate represents a reusable notification template
 type NotificationTemplate struct {
 	ID          uuid.UUID        `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
@@ -17,15 +24,16 @@ type NotificationTemplate struct {
 	Type        NotificationType `gorm:"type:varchar(20);not null;uniqueIndex:idx_template_name_type_tenant,priority:3" json:"type"`
 	Locale      string           `gorm:"type:varchar(10);not null;default:'en'" json:"locale"`
 	Subject     string           `gorm:"type:varchar(500)" json:"subject,omitempty"`
-	Body        string           `gorm:"type:text;not null" json:"body"`
+	Body        string           `gorm:"type:text" json:"body"`
 	Description string           `gorm:"type:text" json:"description,omitempty"`
 
 	// Template variables (JSON array of variable names)
 	Variables string `gorm:"type:jsonb" json:"variables,omitempty"` // e.g., ["userName", "code", "expiryTime"]
 
 	// Provider specific settings
-	Provider         string `gorm:"type:varchar(100)" json:"provider,omitempty"`
-	ProviderTemplate string `gorm:"type:varchar(255)" json:"providerTemplate,omitempty"`
+	Provider          string `gorm:"type:varchar(100)" json:"provider,omitempty"`
+	ProviderTemplate  string `gorm:"type:varchar(255)" json:"providerTemplate,omitempty"`
+	ProviderTemplates string `gorm:"type:jsonb" json:"providerTemplates,omitempty"`
 
 	// Status
 	IsActive bool `gorm:"not null;default:true" json:"isActive"`
@@ -68,5 +76,27 @@ func (nt *NotificationTemplate) SetVariables(vars []string) error {
 		return err
 	}
 	nt.Variables = string(data)
+	return nil
+}
+
+// ParseProviderTemplates parses the ProviderTemplates JSON string into ProviderTemplateMap slice
+func (nt *NotificationTemplate) ParseProviderTemplates() []ProviderTemplateMap {
+	if nt.ProviderTemplates == "" || nt.ProviderTemplates == "[]" || nt.ProviderTemplates == "null" {
+		return nil
+	}
+	var maps []ProviderTemplateMap
+	if err := json.Unmarshal([]byte(nt.ProviderTemplates), &maps); err != nil {
+		return nil
+	}
+	return maps
+}
+
+// SetProviderTemplates sets the ProviderTemplates field from a slice of ProviderTemplateMap
+func (nt *NotificationTemplate) SetProviderTemplates(maps []ProviderTemplateMap) error {
+	data, err := json.Marshal(maps)
+	if err != nil {
+		return err
+	}
+	nt.ProviderTemplates = string(data)
 	return nil
 }

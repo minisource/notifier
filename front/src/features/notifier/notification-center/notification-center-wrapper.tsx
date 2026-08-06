@@ -10,13 +10,15 @@ import { useAdminNotifications, useMeUnreadCount, useMeReadAllNotifications } fr
 import { notifierKeys } from '@/features/notifier/api/notifier-queries';
 import { adminNotificationsApi } from '@/features/notifier/api/notifier-api-mode';
 import { useNotifierRealtime, useShowLiveToast } from '@/features/notifier/realtime/use-notifier-realtime';
+import { useIsMobile } from '@/hooks/use-media-query';
 import type { Notification } from '@/features/notifier/api/notifier-types';
 
 export function NotificationCenterWrapper() {
   const queryClient = useQueryClient();
   const params = useParams();
   const router = useRouter();
-  const locale = (params?.locale as string) || 'fa';
+  const locale = (params?.locale as string) || 'en';
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
   const prevUnreadRef = useRef(0);
@@ -73,7 +75,7 @@ export function NotificationCenterWrapper() {
         return;
       }
     }
-    router.push(`/${locale}/notifications/${notification.id}`);
+    router.push(`/notifications/${notification.id}`);
   }, [locale, router]);
 
   return (
@@ -83,21 +85,10 @@ export function NotificationCenterWrapper() {
         isLoading={unreadLoading}
         onClick={() => setOpen(true)}
       />
-      <div className="hidden sm:block">
-        <NotificationCenterPopover
-          open={open}
-          onOpenChange={setOpen}
-          notifications={filteredNotifications}
-          unreadCount={unreadCount}
-          isLoading={notificationsLoading}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          onMarkRead={handleMarkRead}
-          onMarkAllRead={handleMarkAllRead}
-          onNotificationClick={handleNotificationClick}
-        />
-      </div>
-      <div className="sm:hidden">
+      {/* Render exactly ONE surface — both are Radix portals, so CSS display:none
+          on a wrapper does NOT hide them; mounting both made the modal Sheet steal
+          focus and immediately close the shared `open` state. */}
+      {isMobile ? (
         <NotificationCenterSheet
           open={open}
           onOpenChange={setOpen}
@@ -110,7 +101,20 @@ export function NotificationCenterWrapper() {
           onMarkAllRead={handleMarkAllRead}
           onNotificationClick={handleNotificationClick}
         />
-      </div>
+      ) : (
+        <NotificationCenterPopover
+          open={open}
+          onOpenChange={setOpen}
+          notifications={filteredNotifications}
+          unreadCount={unreadCount}
+          isLoading={notificationsLoading}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onMarkRead={handleMarkRead}
+          onMarkAllRead={handleMarkAllRead}
+          onNotificationClick={handleNotificationClick}
+        />
+      )}
     </>
   );
 }

@@ -23,7 +23,8 @@ export function useRetryDelivery() {
   return useMutation({
     mutationFn: (id: string) => retryDelivery(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: deliveriesKeys.lists() });
+      // Invalidate both list and detail caches so any consumer stays fresh.
+      queryClient.invalidateQueries({ queryKey: deliveriesKeys.all });
     },
   });
 }
