@@ -36,12 +36,23 @@ type NotificationPreference struct {
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deletedAt,omitempty"`
 }
 
+// BeforeSave hook to ensure jsonb fields have valid JSON defaults
+func (np *NotificationPreference) BeforeSave(tx *gorm.DB) error {
+	if np.QuietHours == "" {
+		np.QuietHours = "{}"
+	}
+	if np.CategorySettings == "" {
+		np.CategorySettings = "{}"
+	}
+	return nil
+}
+
 // BeforeCreate hook to generate UUID if not set
 func (np *NotificationPreference) BeforeCreate(tx *gorm.DB) error {
 	if np.ID == uuid.Nil {
 		np.ID = uuid.New()
 	}
-	return nil
+	return np.BeforeSave(tx)
 }
 
 // SetQuietHours sets the QuietHours field from a config struct

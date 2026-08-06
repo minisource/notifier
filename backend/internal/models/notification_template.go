@@ -44,12 +44,23 @@ type NotificationTemplate struct {
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deletedAt,omitempty"`
 }
 
+// BeforeSave hook to ensure jsonb fields have valid JSON defaults
+func (nt *NotificationTemplate) BeforeSave(tx *gorm.DB) error {
+	if nt.Variables == "" {
+		nt.Variables = "[]"
+	}
+	if nt.ProviderTemplates == "" {
+		nt.ProviderTemplates = "[]"
+	}
+	return nil
+}
+
 // BeforeCreate hook to generate UUID if not set
 func (nt *NotificationTemplate) BeforeCreate(tx *gorm.DB) error {
 	if nt.ID == uuid.Nil {
 		nt.ID = uuid.New()
 	}
-	return nil
+	return nt.BeforeSave(tx)
 }
 
 // TableName specifies the table name
