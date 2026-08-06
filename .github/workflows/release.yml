@@ -46,12 +46,9 @@ jobs:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  # Frontend Docker release blocked until Phase 7 (design-system npm publish)
   docker-frontend:
     name: Docker Publish Frontend
     needs: backend-validate
-    runs-on: ubuntu-latest
-    if: false  # BLOCKED — design-system not on npm yet
     uses: minisource/.github/.github/workflows/docker-release.yml@main
     with:
       image-name: ${{ secrets.DOCKERHUB_USERNAME }}/notifier-frontend
